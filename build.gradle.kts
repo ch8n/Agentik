@@ -24,6 +24,7 @@ dependencies {
     implementation("dev.langchain4j:langchain4j:0.36.2")
     implementation("dev.langchain4j:langchain4j-ollama:0.36.2")
     implementation("org.jsoup:jsoup:1.16.1")
+    implementation("com.microsoft.playwright:playwright:1.40.0")
 }
 
 compose.desktop {
