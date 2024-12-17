@@ -5,6 +5,11 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.IOException
 
+fun main() {
+    val site = JsoupKtx().scrapeSiteAsString("https://www.phidata.com")
+    println(site)
+}
+
 class JsoupKtx {
 
     fun scrape(url: String): Document? {
