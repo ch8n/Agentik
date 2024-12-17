@@ -1,9 +1,9 @@
 package functions.websearch
 
-import com.microsoft.playwright.Browser
 import com.microsoft.playwright.BrowserType.LaunchOptions
 import com.microsoft.playwright.Page
 import com.microsoft.playwright.Playwright
+import dev.langchain4j.agent.tool.Tool
 import java.net.URLEncoder
 
 data class SearchResult(val title: String, val url: String)
@@ -12,6 +12,7 @@ enum class SearchProvider {
     Google,
     DuckDuckGo
 }
+
 
 class WebSearchKtx {
 
@@ -71,7 +72,8 @@ class WebSearchKtx {
         return results
     }
 
-    fun searchWeb(query: String, topK: Int, searchProvider: SearchProvider): List<SearchResult> {
+    @Tool("Return list of search result from a given search query")
+    fun searchWeb(searchQuery: String, topkSearchResult: Int, searchProvider: SearchProvider): List<SearchResult> {
         val playwright = Playwright.create()
 
         val browser = playwright
@@ -83,8 +85,8 @@ class WebSearchKtx {
         val page = context.newPage()
 
         val searchResults = when(searchProvider){
-            SearchProvider.Google -> performGoogleSearch(page, query, topK)
-            SearchProvider.DuckDuckGo -> performDuckDuckGoSearch(page, query, topK)
+            SearchProvider.Google -> performGoogleSearch(page, searchQuery, topkSearchResult)
+            SearchProvider.DuckDuckGo -> performDuckDuckGoSearch(page, searchQuery, topkSearchResult)
         }
 
         browser.close()
