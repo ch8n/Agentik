@@ -26,6 +26,7 @@ dependencies {
     implementation("org.jsoup:jsoup:1.16.1")
     implementation("com.microsoft.playwright:playwright:1.40.0")
     implementation("org.eclipse.jgit:org.eclipse.jgit:6.7.0.202309050840-r")
+    implementation("org.testcontainers:testcontainers:1.20.4")
 }
 
 compose.desktop {
