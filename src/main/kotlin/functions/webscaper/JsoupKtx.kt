@@ -1,5 +1,6 @@
 package functions.webscaper
 
+import agent.AgentikTool
 import dev.langchain4j.agent.tool.Tool
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -10,7 +11,7 @@ fun main() {
     println(site)
 }
 
-class JsoupKtx {
+class JsoupKtx : AgentikTool {
 
     fun scrape(url: String): Document? {
         return runCatching {

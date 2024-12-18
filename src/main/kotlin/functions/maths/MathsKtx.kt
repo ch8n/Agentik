@@ -1,10 +1,11 @@
 package functions.maths
 
+import agent.AgentikTool
 import dev.langchain4j.agent.tool.Tool
 import kotlin.math.*
 
 
-class MathsKtx {
+class MathsKtx : AgentikTool {
     @Tool("Returns the absolute value of a number")
     fun absoluteValueOfNumber(number: Double): Double {
         return abs(number)

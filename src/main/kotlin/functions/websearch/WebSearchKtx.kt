@@ -1,5 +1,6 @@
 package functions.websearch
 
+import agent.AgentikTool
 import com.microsoft.playwright.BrowserType.LaunchOptions
 import com.microsoft.playwright.Page
 import com.microsoft.playwright.Playwright
@@ -14,7 +15,7 @@ enum class SearchProvider {
 }
 
 
-class WebSearchKtx {
+class WebSearchKtx : AgentikTool {
 
     fun performDuckDuckGoSearch(page: Page, query: String, topK: Int): List<SearchResult> {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")

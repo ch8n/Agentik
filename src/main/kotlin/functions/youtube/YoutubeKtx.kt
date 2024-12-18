@@ -1,5 +1,6 @@
 package functions.youtube
 
+import agent.AgentikTool
 import dev.langchain4j.agent.tool.Tool
 import functions.webscaper.JsoupKtx
 import okhttp3.OkHttpClient
@@ -12,7 +13,7 @@ fun main() {
     println(transcript)
 }
 
-class YoutubeKtx {
+class YoutubeKtx : AgentikTool {
 
     @Tool("Returns english transcription of youtube video as string")
     fun englishTranscriptionContent(youtubeUrl: String) = englishTranscriptionUrl(youtubeUrl)

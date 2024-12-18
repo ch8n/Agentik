@@ -1,5 +1,6 @@
 package functions.github
 
+import agent.AgentikTool
 import dev.langchain4j.agent.tool.Tool
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.diff.DiffEntry
@@ -11,7 +12,7 @@ import org.eclipse.jgit.treewalk.CanonicalTreeParser
 import java.io.ByteArrayOutputStream
 import java.io.File
 
-class GithubKtx {
+class GithubKtx : AgentikTool {
 
     @Tool("Returns File of locally cloned github repository url")
     fun cloneRepository(repoUrl: String): File? {
