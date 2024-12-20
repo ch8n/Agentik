@@ -12,6 +12,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import memory.sessions.SessionStorage
 import models.Ollama
 import utils.Response
 
@@ -28,7 +29,8 @@ fun App() {
 
             val agentik = remember {
                 Agentik(
-                    model = Ollama("qwen2.5:0.5b-instruct")
+                    model = Ollama("qwen2.5:0.5b-instruct"),
+                    sessionStorage = SessionStorage(10)
                 )
             }
 

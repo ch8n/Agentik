@@ -13,6 +13,7 @@ class MathsKtx : AgentikTool {
 
     @Tool("Returns minimum from list of numbers")
     fun minimumOf(vararg number: Double): Double {
+        println("called minimumOf ${number.joinToString()}")
         val take1 = number.first()
         val rest = number.drop(1)
         return minOf(take1, *rest.toTypedArray())
@@ -29,7 +30,9 @@ class MathsKtx : AgentikTool {
     fun squareRootOf(number: Double): Double = sqrt(number)
 
     @Tool("Raises a number to the power of another number")
-    fun powerOf(number: Double, power: Double): Double = number.pow(power)
+    fun powerOf(number: Double, power: Double): Double = number.pow(power).also {
+        print("called powerOf $number $power")
+    }
 
     @Tool("Round a floating point number to nearest integer, example: 2.5 to 3.0")
     fun roundOff(number: Double) = round(number)

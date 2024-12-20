@@ -73,8 +73,9 @@ class WebSearchKtx : AgentikTool {
         return results
     }
 
-    @Tool("Return list of search result from a given search query")
-    fun searchWeb(searchQuery: String, topkSearchResult: Int, searchProvider: SearchProvider): List<SearchResult> {
+    @Tool
+    fun searchWebForResult(searchQuery: String, searchResultCount: Int, searchProvider: SearchProvider): List<SearchResult> {
+        println("searchWebForResult called $searchQuery $searchResultCount $searchProvider")
         val playwright = Playwright.create()
 
         val browser = playwright
@@ -86,8 +87,8 @@ class WebSearchKtx : AgentikTool {
         val page = context.newPage()
 
         val searchResults = when(searchProvider){
-            SearchProvider.Google -> performGoogleSearch(page, searchQuery, topkSearchResult)
-            SearchProvider.DuckDuckGo -> performDuckDuckGoSearch(page, searchQuery, topkSearchResult)
+            SearchProvider.Google -> performGoogleSearch(page, searchQuery, searchResultCount)
+            SearchProvider.DuckDuckGo -> performDuckDuckGoSearch(page, searchQuery, searchResultCount)
         }
 
         browser.close()

@@ -2,8 +2,10 @@ package agent
 
 import dev.langchain4j.model.StreamingResponseHandler
 import dev.langchain4j.model.input.Prompt
+import dev.langchain4j.service.AiServices
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
+import memory.sessions.SessionStorage
 import models.AgentikModel
 import models.Ollama
 import utils.Response
@@ -11,6 +13,7 @@ import utils.Response
 
 data class Agentik(
     val model: AgentikModel,
+    val sessionStorage: SessionStorage
 //    val tools: List<AgentikTool>,
 //    val debug: Boolean,
 //    val systemPrompt: String,
@@ -19,8 +22,9 @@ data class Agentik(
 //    val toolCallHistory: List<String>,
 ) {
 
-    val response = MutableSharedFlow<Response<String>>()
 
+
+    val response = MutableSharedFlow<Response<String>>()
     suspend fun execute(userPrompt: String) {
         when (model) {
             is Ollama -> {
@@ -33,7 +37,6 @@ data class Agentik(
             }
         }
     }
-
     suspend fun executeStreaming(userPrompt: String) {
         when (model) {
             is Ollama -> {
@@ -59,6 +62,7 @@ data class Agentik(
             }
         }
     }
+
 }
 
 interface AgentikTool
