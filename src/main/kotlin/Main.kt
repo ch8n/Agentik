@@ -3,18 +3,28 @@ import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.util.fastJoinToString
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import dev.langchain4j.data.message.AiMessage
+import dev.langchain4j.data.message.ChatMessageType
+import dev.langchain4j.data.message.SystemMessage
+import dev.langchain4j.data.message.ToolExecutionResultMessage
+import dev.langchain4j.data.message.UserMessage
+import functions.maths.MathsKtx
+import functions.websearch.WebSearchKtx
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import memory.sessions.SessionStorage
-import models.Ollama
-import utils.Response
 
 @Composable
 @Preview
@@ -29,27 +39,47 @@ fun App() {
 
             val agentik = remember {
                 Agentik(
-                    model = Ollama("qwen2.5:0.5b-instruct"),
-                    sessionStorage = SessionStorage(10)
+                    systemPrompt = """
+                        You run in a loop of Thought, Action, PAUSE, Observation.
+                        At the end of the loop you output an Answer
+                        Use Thought to describe your thoughts about the question you have been asked.
+                        Use Action to run one of the actions available to you - then return PAUSE.
+                        Observation will be the result of running those actions.
+                        
+                        Example session:
+
+                        Question: What is the mass of Earth times 2?
+                        Thought: I need to find the mass of Earth
+                        Action: get_planet_mass: Earth
+                        PAUSE 
+
+                        You will be called again with this:
+
+                        Observation: 5.972e24
+
+                        Thought: I need to multiply this by 2
+                        Action: calculate: 5.972e24 * 2
+                        PAUSE
+
+                        You will be called again with this: 
+
+                        Observation: 1,1944×10e25
+
+                        If you have the answer, output it as the Answer.
+
+                        Answer: The mass of Earth times 2 is 1,1944×10e25.
+
+                        Now it's your turn:
+                    """.trimIndent(),
+                    tools = mutableListOf(
+                        WebSearchKtx(), MathsKtx()
+                    )
                 )
             }
 
-            val response: Response<String> by agentik.response.collectAsState(Response.Success(""))
 
-            when (response) {
-                is Response.Error -> {
-                    Text(
-                        ((response as Response.Error).error).message
-                            ?: "Error occured! ${(response as Response.Error).error}"
-                    )
-                }
-
-                is Response.Success<*> -> {
-                    Text((response as Response.Success<String>).value)
-                }
-            }
-
-            var inputState = remember { mutableStateOf("Hi! who are you?") }
+            var inputState = remember { mutableStateOf("what is weather in delhi?") }
+            var outState = remember { mutableStateOf("Output:") }
 
             OutlinedTextField(
                 value = inputState.value,
@@ -69,19 +99,36 @@ fun App() {
                         isStreaming.value = it
                     }
                 )
+
                 Text("Steaming?")
             }
 
             Button(onClick = {
                 scope.launch(Dispatchers.IO) {
-                    if (isStreaming.value) {
-                        agentik.executeStreaming(inputState.value)
-                    } else {
-                        agentik.execute(inputState.value)
+                    val response = agentik.execute(inputState.value)
+                    outState.value = """
+                        $response
+                        ----
+                        ${
+                        agentik.messages().joinToString("\n") {
+                            when (it.type()) {
+                                ChatMessageType.SYSTEM -> "system | ${(it as SystemMessage).text()}"
+                                ChatMessageType.USER -> "user | ${(it as UserMessage).singleText()}"
+                                ChatMessageType.AI -> "ai | ${(it as AiMessage).text()}"
+                                ChatMessageType.TOOL_EXECUTION_RESULT -> "tool | ${(it as ToolExecutionResultMessage).text()}"
+                            }
+                        }
                     }
+                    """.trimIndent()
                 }
             }) {
                 Text("Send")
+            }
+
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
+                Text(outState.value)
             }
         }
     }

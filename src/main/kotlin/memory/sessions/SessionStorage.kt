@@ -1,6 +1,7 @@
 package memory.sessions
 
 import dev.langchain4j.data.message.AiMessage
+import dev.langchain4j.data.message.ChatMessage
 import dev.langchain4j.data.message.ContentType
 import dev.langchain4j.data.message.ImageContent
 import dev.langchain4j.data.message.TextContent
@@ -28,7 +29,7 @@ class SessionStorage(
 
     fun l4jChatMemory(): MessageWindowChatMemory = chatMemory
 
-    fun messages(): List<AgentikMessage> {
+    private fun _messages(): List<AgentikMessage> {
         return chatMemory.messages().mapNotNull { chatMessage ->
             return@mapNotNull when (chatMessage) {
                 is AiMessage -> AgentMessage(chatMessage.text())
@@ -51,6 +52,10 @@ class SessionStorage(
                 else -> null
             }
         }
+    }
+
+    fun l4jChatMemoryMessages(): List<ChatMessage> {
+        return chatMemory.messages() ?: emptyList()
     }
 }
 

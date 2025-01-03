@@ -1,68 +1,51 @@
 package agent
 
-import dev.langchain4j.model.StreamingResponseHandler
-import dev.langchain4j.model.input.Prompt
 import dev.langchain4j.service.AiServices
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.*
 import memory.sessions.SessionStorage
 import models.AgentikModel
-import models.Ollama
-import utils.Response
+import models.chatLanguageModel
 
+
+private interface AiAssistant {
+
+    fun chat(prompt: String): String
+}
 
 data class Agentik(
-    val model: AgentikModel,
-    val sessionStorage: SessionStorage
-//    val tools: List<AgentikTool>,
-//    val debug: Boolean,
-//    val systemPrompt: String,
-//    val chatHistory: List<String>,
-//    val knowledgeBase: List<KnowledgeBase>,
-//    val toolCallHistory: List<String>,
+    val systemPrompt: String = "",
+    val model: AgentikModel = AgentikModel.Ollama,
+    val modelName: String = "llama3.2:latest",
+    val tools: MutableList<AgentikTool> = mutableListOf<AgentikTool>()
 ) {
 
+    private var assistantAgent: AiAssistant? = null
+    private val sessionStorage = SessionStorage(100)
 
-
-    val response = MutableSharedFlow<Response<String>>()
-    suspend fun execute(userPrompt: String) {
-        when (model) {
-            is Ollama -> {
-                val modelResponse = Response.build {
-                    model.languageModel
-                        .generate(Prompt(userPrompt))
-                        .content()
+    init {
+        val chatLanguageModel = chatLanguageModel(
+            agentikModel = model,
+            modelName = modelName
+        )
+        assistantAgent = AiServices
+            .builder(AiAssistant::class.java)
+            .let {
+                if (systemPrompt.isNotEmpty()) {
+                    it.systemMessageProvider { systemPrompt }
+                } else {
+                    it
                 }
-                response.emit(modelResponse)
             }
-        }
-    }
-    suspend fun executeStreaming(userPrompt: String) {
-        when (model) {
-            is Ollama -> {
-                callbackFlow {
-                    val responseBuilder = StringBuilder()
-                    val modelResponse = object : StreamingResponseHandler<String> {
-                        override fun onNext(chunk: String) {
-                            responseBuilder.append(chunk)
-                            trySend(responseBuilder.toString())
-                        }
-
-                        override fun onError(error: Throwable?) {
-                            if (error != null) throw error
-                        }
-                    }
-                    model.streamingLanguageModel.generate(Prompt(userPrompt), modelResponse)
-                    awaitClose {}
-                }.catch { error ->
-                    response.emit(Response.Error(error))
-                }.onEach { _response ->
-                    response.emit(Response.Success(_response))
-                }.collect()
-            }
-        }
+            .chatLanguageModel(chatLanguageModel)
+            .chatMemory(sessionStorage.l4jChatMemory())
+            .tools(*tools.toTypedArray())
+            .build()
     }
 
+    fun messages() = sessionStorage.l4jChatMemoryMessages()
+
+    fun execute(userPrompt: String): String {
+        return runCatching { assistantAgent?.chat(userPrompt) }.getOrNull() ?: "Failed to response!"
+    }
 }
 
 interface AgentikTool

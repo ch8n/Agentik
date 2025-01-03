@@ -5,6 +5,7 @@ import com.microsoft.playwright.BrowserType.LaunchOptions
 import com.microsoft.playwright.Page
 import com.microsoft.playwright.Playwright
 import dev.langchain4j.agent.tool.Tool
+import functions.webscaper.JsoupKtx
 import java.net.URLEncoder
 
 data class SearchResult(val title: String, val url: String)
@@ -73,22 +74,24 @@ class WebSearchKtx : AgentikTool {
         return results
     }
 
-    @Tool
-    fun searchWebForResult(searchQuery: String, searchResultCount: Int, searchProvider: SearchProvider): List<SearchResult> {
-        println("searchWebForResult called $searchQuery $searchResultCount $searchProvider")
+
+    fun searchWebForResult(searchQuery: String, minimumSearchResultToLookFor: Int, searchProvider: SearchProvider): List<SearchResult> {
+        println("searchWebForResult called $searchQuery $minimumSearchResultToLookFor $searchProvider")
         val playwright = Playwright.create()
+
+        val minimumSearchResultToLookFor = if (minimumSearchResultToLookFor == 0) 5 else minimumSearchResultToLookFor
 
         val browser = playwright
             .chromium()
-            .launch(LaunchOptions().setHeadless(true)) // Headless mode
+            .launch(LaunchOptions().setHeadless(false)) // Headless mode
 
         // Create a new browser context and page
         val context = browser.newContext()
         val page = context.newPage()
 
         val searchResults = when(searchProvider){
-            SearchProvider.Google -> performGoogleSearch(page, searchQuery, searchResultCount)
-            SearchProvider.DuckDuckGo -> performDuckDuckGoSearch(page, searchQuery, searchResultCount)
+            SearchProvider.Google -> performGoogleSearch(page, searchQuery, minimumSearchResultToLookFor)
+            SearchProvider.DuckDuckGo -> performDuckDuckGoSearch(page, searchQuery, minimumSearchResultToLookFor)
         }
 
         browser.close()
@@ -96,4 +99,26 @@ class WebSearchKtx : AgentikTool {
 
         return searchResults
     }
+
+    @Tool
+    fun searchWeb(searchQuery: String): List<String> {
+        println("searchWeb query: $searchQuery")
+        val results = searchWebForResult(searchQuery, 3, SearchProvider.Google)
+        println("searchResults $results")
+        val jsoup = JsoupKtx()
+        return results.map {
+            """
+                title: ${it.title}
+                content: ${jsoup.scrapeSiteAsString(it.url)}
+            """.trimIndent()
+        }
+    }
+
 }
+
+fun main() {
+    val results = WebSearchKtx().searchWeb("what is kotlin kmp?")
+    println(results.joinToString("\n"))
+}
+
+

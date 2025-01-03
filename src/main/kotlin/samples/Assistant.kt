@@ -1,14 +1,24 @@
 package samples
 
+import dev.langchain4j.model.input.Prompt
 import dev.langchain4j.model.ollama.OllamaChatModel
 import dev.langchain4j.service.AiServices
 import dev.langchain4j.service.SystemMessage
+import dev.langchain4j.service.UserMessage
 import functions.maths.MathsKtx
 import functions.websearch.WebSearchKtx
 import memory.sessions.SessionStorage
 
 
+enum class Agent {
+    Math,
+    Search
+}
+
+data class Work(val agent: Agent, val step: String)
+
 interface Assistant {
+
     @SystemMessage("you are helpful assistant")
     fun chat(prompt: String): String
 }
@@ -23,13 +33,17 @@ fun main() {
         .modelName(modelName)
         .build()
 
-    val assitant = AiServices
+    val mathsAgent = AiServices
         .builder(Assistant::class.java)
         .chatLanguageModel(streamingLanguageModel)
         .chatMemory(SessionStorage(100).l4jChatMemory())
-        .tools(MathsKtx(), WebSearchKtx())
+        .tools(MathsKtx())
         .build()
 
-    val result = assitant.chat("give me 5 best source to learn langchain4j with jetpack compose? share links to sources")
-    print(result)
+    val webAgent = AiServices
+        .builder(Assistant::class.java)
+        .chatLanguageModel(streamingLanguageModel)
+        .chatMemory(SessionStorage(100).l4jChatMemory())
+        .tools(WebSearchKtx())
+        .build()
 }

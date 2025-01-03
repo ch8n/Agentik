@@ -1,26 +1,42 @@
 package models
 
-import dev.langchain4j.model.language.LanguageModel
+import dev.langchain4j.model.chat.ChatLanguageModel
 import dev.langchain4j.model.language.StreamingLanguageModel
-import dev.langchain4j.model.ollama.OllamaLanguageModel
+import dev.langchain4j.model.ollama.OllamaChatModel
 import dev.langchain4j.model.ollama.OllamaStreamingLanguageModel
 
-sealed class AgentikModel
 
-data class Ollama(
-    val modelName: String,
-    val baseUrl: String = "http://localhost:11434",
-) : AgentikModel() {
+enum class AgentikModel {
+    Ollama
+}
 
-    val languageModel: LanguageModel = OllamaLanguageModel
-        .OllamaLanguageModelBuilder()
-        .baseUrl(baseUrl)
-        .modelName(modelName)
-        .build()
+fun chatLanguageModel(
+    agentikModel: AgentikModel = AgentikModel.Ollama,
+    modelName: String = "qwen2.5:0.5b-instruct",
+    baseUrl: String = "http://localhost:11434",
+) : ChatLanguageModel {
+    return when(agentikModel){
+        AgentikModel.Ollama -> {
+            OllamaChatModel.OllamaChatModelBuilder()
+                .baseUrl(baseUrl)
+                .modelName(modelName)
+                .build()
+        }
+    }
+}
 
-    val streamingLanguageModel: StreamingLanguageModel = OllamaStreamingLanguageModel
-        .OllamaStreamingLanguageModelBuilder()
-        .baseUrl(baseUrl)
-        .modelName(modelName)
-        .build()
+fun streamingLanguageModel(
+    agentikModel: AgentikModel = AgentikModel.Ollama,
+    modelName: String = "qwen2.5:0.5b-instruct",
+    baseUrl: String = "http://localhost:11434",
+) : StreamingLanguageModel {
+    return when(agentikModel){
+        AgentikModel.Ollama -> {
+            OllamaStreamingLanguageModel
+                .OllamaStreamingLanguageModelBuilder()
+                .baseUrl(baseUrl)
+                .modelName(modelName)
+                .build()
+        }
+    }
 }
