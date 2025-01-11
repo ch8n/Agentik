@@ -27,6 +27,11 @@ dependencies {
     implementation("com.microsoft.playwright:playwright:1.40.0")
     implementation("org.eclipse.jgit:org.eclipse.jgit:6.7.0.202309050840-r")
     implementation("org.testcontainers:testcontainers:1.20.4")
+
+    implementation("org.jetbrains.kotlin:kotlin-scripting-common")
+    implementation("org.jetbrains.kotlin:kotlin-scripting-jvm")
+    implementation("org.jetbrains.kotlin:kotlin-scripting-jvm-host")
+    implementation("org.jetbrains.kotlin:kotlin-compiler")
 }
 
 compose.desktop {
