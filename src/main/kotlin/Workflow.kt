@@ -1,6 +1,7 @@
 import dev.langchain4j.model.chat.ChatLanguageModel
 import kotlinx.coroutines.runBlocking
 import models.chatLanguageModel
+import java.io.File
 import kotlin.script.experimental.api.ScriptCompilationConfiguration
 import kotlin.script.experimental.api.ScriptEvaluationConfiguration
 import kotlin.script.experimental.host.toScriptSource
@@ -75,7 +76,7 @@ class TestGenerationAgent(
             $code
             
             Don't Add explanation just the code, any explanation or note should be in comment
-            
+           
             
             
             fun main() {
@@ -120,6 +121,27 @@ class CodeGenerationWorkflow(
         var currentCode = ""
         var attempts = 0
 
+        // Manager Agent initiates code generation
+        val managerGuidance = managerAgent.initiateCodeGeneration(requirement)
+
+        // Code Generation Agent generates code
+        currentCode = codeGenerationAgent.generateCode(managerGuidance)
+
+        // Test Generation Agent creates test cases
+        val codeWithTestCases = testGenerationAgent.generateTestCases(currentCode)
+
+        val codeFile = File("code.kts")
+        codeFile.delete()
+        codeFile.createNewFile()
+        codeFile.writeText(currentCode)
+
+        val codeFileTestCase = File("codeTestCase.kts")
+        codeFileTestCase.delete()
+        codeFileTestCase.createNewFile()
+        codeFileTestCase.writeText(codeWithTestCases)
+
+        return ""
+
         while (attempts < maxAttempts) {
             // Manager Agent initiates code generation
             val managerGuidance = managerAgent.initiateCodeGeneration(requirement)
@@ -130,17 +152,25 @@ class CodeGenerationWorkflow(
             // Test Generation Agent creates test cases
             val codeWithTestCases = testGenerationAgent.generateTestCases(currentCode)
 
-            // Code Execution Agent runs test cases
-            val testResult = codeExecutionAgent.runTestCases(currentCode, codeWithTestCases)
+            val codeFile = File("code.kts")
+            codeFile.createNewFile()
+            codeFile.writeText(currentCode)
 
-            if (testResult) {
-                println("Code generation successful!")
-                return currentCode
-            } else {
-                println("Test cases failed. Attempting to improve code...")
-                currentCode = codeGenerationAgent.improveCode(currentCode, "Test cases failed")
-                attempts++
-            }
+            val codeFileTestCase = File("codeTestCase.kts")
+            codeFile.createNewFile()
+            codeFile.writeText(codeWithTestCases)
+
+            // Code Execution Agent runs test cases
+            //val testResult = codeExecutionAgent.runTestCases(currentCode, codeWithTestCases)
+
+//            if (testResult) {
+//                println("Code generation successful!")
+//                return currentCode
+//            } else {
+//                println("Test cases failed. Attempting to improve code...")
+//                currentCode = codeGenerationAgent.improveCode(currentCode, "Test cases failed")
+//                attempts++
+//            }
         }
 
         throw Exception("Unable to generate working code after $maxAttempts attempts")
