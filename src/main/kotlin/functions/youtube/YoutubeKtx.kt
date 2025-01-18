@@ -17,7 +17,10 @@ class YoutubeKtx : AgentikTool {
 
     @Tool("Returns english transcription of youtube video as string")
     fun englishTranscriptionContent(youtubeUrl: String) = englishTranscriptionUrl(youtubeUrl)
-        ?.let { url -> JsoupKtx().scrape(url)?.text() }
+        ?.let { url ->
+            println(url)
+            JsoupKtx().scrape(url)?.text()
+        }
 
     fun englishTranscriptionUrl(youtubeUrl: String) = transcriptionUrls(youtubeUrl)
         .firstOrNull { it.contains("lang=en") }
@@ -25,6 +28,7 @@ class YoutubeKtx : AgentikTool {
     fun transcriptionUrls(youtubeUrl: String): List<String> {
         val videoId = extractVideoId(youtubeUrl) ?: return emptyList()
         val url = "https://youtu.be/$videoId"
+        println(url)
         val responseString = makeGetRequest(url) ?: return emptyList()
         return extractBaseUrls(responseString)
     }
