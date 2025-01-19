@@ -1,11 +1,9 @@
 package workflows
 
 import agent.Agentik
-import dev.langchain4j.model.chat.ChatLanguageModel
 import functions.youtube.YoutubeKtx
 import kotlinx.coroutines.runBlocking
 import models.AgentikModel
-import models.chatLanguageModel
 
 
 class YoutubeAgent(
@@ -32,7 +30,7 @@ class YoutubeAgent(
 
         val agent = Agentik(
             systemPrompt = summarizePrompt,
-            model = model,
+            modelType = model,
             modelName = modelName,
             tools = listOf(YoutubeKtx()),
         )

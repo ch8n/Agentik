@@ -13,7 +13,7 @@ private interface AiAssistant {
 
 data class Agentik(
     val systemPrompt: String = "",
-    val model: AgentikModel = AgentikModel.Ollama,
+    val modelType: AgentikModel = AgentikModel.Ollama,
     val modelName: String = "llama3.2:latest",
     val tools: List<AgentikTool> = emptyList()
 ) {
@@ -23,7 +23,7 @@ data class Agentik(
 
     init {
         val chatLanguageModel = chatLanguageModel(
-            agentikModel = model,
+            agentikModel = modelType,
             modelName = modelName
         )
         assistantAgent = AiServices
@@ -46,7 +46,7 @@ data class Agentik(
     fun execute(userPrompt: String): String {
         return try {
             assistantAgent?.chat(userPrompt) ?: "Failed to response"
-        } catch (e: Exception){
+        } catch (e: Exception) {
             e.message ?: "Failed to response"
         }
     }

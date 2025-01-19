@@ -40,30 +40,30 @@ fun App() {
             val agentik = remember {
                 Agentik(
                     systemPrompt = """
-                        You run in a loop of Thought, Action, PAUSE, Observation.
+                        You run in a loop of Thought, agent.planningAgent.Action, PAUSE, agent.planningAgent.Observation.
                         At the end of the loop you output an Answer
                         Use Thought to describe your thoughts about the question you have been asked.
-                        Use Action to run one of the actions available to you - then return PAUSE.
-                        Observation will be the result of running those actions.
+                        Use agent.planningAgent.Action to run one of the actions available to you - then return PAUSE.
+                        agent.planningAgent.Observation will be the result of running those actions.
                         
                         Example session:
 
                         Question: What is the mass of Earth times 2?
                         Thought: I need to find the mass of Earth
-                        Action: get_planet_mass: Earth
+                        agent.planningAgent.Action: get_planet_mass: Earth
                         PAUSE 
 
                         You will be called again with this:
 
-                        Observation: 5.972e24
+                        agent.planningAgent.Observation: 5.972e24
 
                         Thought: I need to multiply this by 2
-                        Action: calculate: 5.972e24 * 2
+                        agent.planningAgent.Action: calculate: 5.972e24 * 2
                         PAUSE
 
                         You will be called again with this: 
 
-                        Observation: 1,1944×10e25
+                        agent.planningAgent.Observation: 1,1944×10e25
 
                         If you have the answer, output it as the Answer.
 
