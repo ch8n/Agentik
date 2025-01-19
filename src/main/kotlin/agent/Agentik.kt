@@ -44,7 +44,11 @@ data class Agentik(
     fun messages() = sessionStorage.l4jChatMemoryMessages()
 
     fun execute(userPrompt: String): String {
-        return runCatching { assistantAgent?.chat(userPrompt) }.getOrNull() ?: "Failed to response!"
+        return try {
+            assistantAgent?.chat(userPrompt) ?: "Failed to response"
+        } catch (e: Exception){
+            e.message ?: "Failed to response"
+        }
     }
 }
 
