@@ -165,7 +165,13 @@ class PlanningAgent(
                     remainingStep = remainingStep
                 )
                 planningHistory.add(updatedPlan)
-                println(planningHistory.last())
+                println("""
+                    |Step ${maxSteps - currentStep}
+                    | [Facts]:
+                    |   ${planningHistory.last().fact}
+                    | [Plan]:
+                    |   ${planningHistory.last().plan}
+                """.trimMargin())
             }
             currentStep = remainingStep
         }
@@ -177,6 +183,6 @@ fun main() {
     val plannerAgent = PlanningAgent()
     plannerAgent.execute(
         "Which is the 2nd largest planet? and how many moons it has? name 3 moons bigger than earths?",
-        6
+        3
     )
 }
