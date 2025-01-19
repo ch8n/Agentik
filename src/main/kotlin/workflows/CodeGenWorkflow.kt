@@ -1,3 +1,5 @@
+package workflows
+
 import dev.langchain4j.model.chat.ChatLanguageModel
 import kotlinx.coroutines.runBlocking
 import models.chatLanguageModel
