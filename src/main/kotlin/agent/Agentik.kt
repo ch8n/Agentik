@@ -15,7 +15,7 @@ data class Agentik(
     val systemPrompt: String = "",
     val model: AgentikModel = AgentikModel.Ollama,
     val modelName: String = "llama3.2:latest",
-    val tools: MutableList<AgentikTool> = mutableListOf<AgentikTool>()
+    val tools: List<AgentikTool> = emptyList()
 ) {
 
     private var assistantAgent: AiAssistant? = null
