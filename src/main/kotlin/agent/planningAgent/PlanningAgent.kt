@@ -26,7 +26,7 @@ internal data class PlanningDecision(
 
 fun createAgentsDescriptions(agents: List<AgentikAgent>): String {
     return agents.fold(LOCAL_AGENT_DESCRIPTION) { prompt: String, agent: AgentikAgent ->
-        "$prompt\n- ${agent}: ${agent.description}"
+        "$prompt\n- ${agent.name}: ${agent.description}"
     }
 }
 
@@ -182,7 +182,12 @@ class PlanningAgent(
 fun main() {
     val plannerAgent = PlanningAgent()
     plannerAgent.execute(
-        "Which is the 2nd largest planet? and how many moons it has? name 3 moons bigger than earths?",
+        """
+            I have a software engineer named SE, and QA who create unit testcases, how to create code and test cycle
+            such that: if i give task to SE, then it will write code for it,
+            then QA create test cases for it, if any testcases fails then SE refactor code based on Unit test results,
+            and re-create testcases, until given task is completed.
+        """.trimIndent(),
         3
     )
 }

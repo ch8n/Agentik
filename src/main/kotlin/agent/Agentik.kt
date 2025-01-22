@@ -1,6 +1,12 @@
 package agent
 
+import dev.langchain4j.data.message.AiMessage
+import dev.langchain4j.data.message.ChatMessageType
+import dev.langchain4j.data.message.SystemMessage
+import dev.langchain4j.data.message.ToolExecutionResultMessage
+import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.service.AiServices
+import dev.langchain4j.service.tool.ToolExecution
 import memory.sessions.SessionStorage
 import models.AgentikModel
 import models.chatLanguageModel
@@ -41,7 +47,16 @@ data class Agentik(
             .build()
     }
 
-    fun messages() = sessionStorage.l4jChatMemoryMessages()
+    fun messagesL4j() = sessionStorage.l4jChatMemoryMessages()
+
+    fun messages() = messagesL4j().map {
+        when(it.type()){
+            ChatMessageType.SYSTEM -> (it as SystemMessage).text()
+            ChatMessageType.USER -> (it as UserMessage).singleText()
+            ChatMessageType.AI -> (it as AiMessage).text()
+            ChatMessageType.TOOL_EXECUTION_RESULT -> (it as ToolExecutionResultMessage).text()
+        }
+    }
 
     fun execute(userPrompt: String): String {
         return try {
