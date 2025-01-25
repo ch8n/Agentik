@@ -4,11 +4,6 @@ import dev.langchain4j.model.chat.ChatLanguageModel
 import kotlinx.coroutines.runBlocking
 import models.chatLanguageModel
 import java.io.File
-import kotlin.script.experimental.api.ScriptCompilationConfiguration
-import kotlin.script.experimental.api.ScriptEvaluationConfiguration
-import kotlin.script.experimental.host.toScriptSource
-import kotlin.script.experimental.jvmhost.BasicJvmScriptingHost
-import kotlin.script.experimental.jvmhost.createJvmCompilationConfigurationFromTemplate
 
 
 class ManagerAgent(
@@ -93,23 +88,7 @@ class TestGenerationAgent(
 
 class CodeExecutionAgent {
 
-
-    fun runTestCases(code: String, codeWithTestCases: String): Boolean {
-        val scriptHost = BasicJvmScriptingHost()
-        val compilationConfiguration = createJvmCompilationConfigurationFromTemplate<ScriptCompilationConfiguration> {}
-        val evaluationConfiguration = ScriptEvaluationConfiguration {}
-
-        return try {
-            scriptHost.eval(
-                codeWithTestCases.toScriptSource(),
-                compilationConfiguration,
-                evaluationConfiguration
-            )
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }
+    
 }
 
 // Main Code Generation and Testing Workflow

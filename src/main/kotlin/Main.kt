@@ -111,12 +111,13 @@ fun App() {
                         ----
                         ${
                         agentik.messages().joinToString("\n") {
-                            when (it.type()) {
-                                ChatMessageType.SYSTEM -> "system | ${(it as SystemMessage).text()}"
-                                ChatMessageType.USER -> "user | ${(it as UserMessage).singleText()}"
-                                ChatMessageType.AI -> "ai | ${(it as AiMessage).text()}"
-                                ChatMessageType.TOOL_EXECUTION_RESULT -> "tool | ${(it as ToolExecutionResultMessage).text()}"
-                            }
+//                            when (it.type()) {
+//                                ChatMessageType.SYSTEM -> "system | ${(it as SystemMessage).text()}"
+//                                ChatMessageType.USER -> "user | ${(it as UserMessage).singleText()}"
+//                                ChatMessageType.AI -> "ai | ${(it as AiMessage).text()}"
+//                                ChatMessageType.TOOL_EXECUTION_RESULT -> "tool | ${(it as ToolExecutionResultMessage).text()}"
+//                            }
+                            it.toString()
                         }
                     }
                     """.trimIndent()
