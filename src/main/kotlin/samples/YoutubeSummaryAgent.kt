@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import `01-chat-models`.AgentikModel
 import `01-chat-models`.OllamaAgentikModel
 import `02-functions`.AgentikTool
+import `02-functions`.youtube.YoutubeKtx
 import `03-agents`.Agentik
 
 
@@ -18,7 +19,7 @@ class YoutubeAgent(
             Analyze the english transcription of the provided YouTube video and summarize it comprehensively. 
             Extract the following details:
 
-            1. **Summary**: Provide a concise summary of the video's content, highlighting the main topic and key ideas discussed.
+            1. **Summary**: Provide a brief summary of the video's content, highlighting the main topic and key ideas discussed.
             2. **Key Points**: List the most important takeaways or conclusions presented in the video.
             3. **Link**: Extract the video URL.
             4. **Resource Name**: Identify the name or title of the resource mentioned (e.g., the YouTube channel name, course, book, or tool).
@@ -31,7 +32,7 @@ class YoutubeAgent(
         val agent = Agentik(
             systemPrompt = summarizePrompt,
             chatModel = chatModel,
-            tools = tools
+            tools = listOf(YoutubeKtx()) + tools
         )
         return agent.execute(prompt)
     }
@@ -44,7 +45,7 @@ fun main() = runBlocking {
 
     try {
         val result = youtubeAgent.execute("""
-            https://www.youtube.com/watch?v=8GlHhwtgjKY&list=PL6r74Q3sfWBk2HY3etLKNCqzOMF6PVSWI&index=3&ab_channel=StephFrance
+            https://www.youtube.com/watch?v=NL1FREvENw4&ab_channel=AICodeKing
         """.trimIndent())
         println("Youtube Video Summary:\n$result")
     } catch (e: Exception) {
