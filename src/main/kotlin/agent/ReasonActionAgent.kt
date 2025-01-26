@@ -3,40 +3,46 @@ package agent
 import agent.planningAgent.PlanningAgent
 import agent.planningAgent.createAgentsDescriptions
 
-
-
-data class ActionStep(
-    val agentMemory: List<Map<String, String>> = emptyList(),
-    val step: Int? = null,
-    val error: String = "",
-    val llmOutput: String = "",
-    val observations: String = "",
-    val actionOutput: Any? = null
-)
-
-fun extractCodeFromBlob() {
-
-}
-
 data class ReasonActionAgent(
-    val tools: List<AgentikTool>,
-    val roleBasedAgents: List<RoleBasedAgent> = emptyList(),
     val systemPrompt: String = MultiStepAgentPrompts.CODE_SYSTEM_PROMPT(
-        managedAgentsDescriptions = createAgentsDescriptions(roleBasedAgents)
+        managedAgentsDescriptions = ""
     ),
 ) {
-    val managerAgent = Agentik(
-        tools = tools,
-        systemPrompt = systemPrompt,
+    val codeAgent = CodeAgent(
+        modelName = "hermes3:3b"
     )
 
-    val planner = PlanningAgent()
+    val planner = PlanningAgent(
+        modelName = "hermes3:3b"
+    )
 
     fun execute(task: String, maxSteps: Int = 6) {
         val taskExecutionPlan = planner.execute(task, maxSteps)
-
+        println("""
+            taskExecutionPlan
+            $taskExecutionPlan
+        """.trimIndent())
+        val codingTaskPrompt = buildString {
+            appendLine("For the following task:")
+            appendLine(task)
+            appendLine("Below is the following plan to solve it:")
+            appendLine(taskExecutionPlan)
+            appendLine("write kotlin programming lang code that solves it.")
+        }
+        val result = codeAgent.execute(codingTaskPrompt, maxSteps)
+        println("""
+            reactResult : 
+            $result
+        """.trimIndent())
     }
 
+}
+
+fun main() {
+    val reasonActionAgent = ReasonActionAgent()
+    reasonActionAgent.execute("""
+        write a program to create diamond shape on console using character `$`
+    """.trimIndent(), 3)
 }
 
 

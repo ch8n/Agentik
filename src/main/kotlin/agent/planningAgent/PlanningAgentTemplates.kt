@@ -81,6 +81,11 @@ An expert system for breaking down and planning complex tasks.
 This tool excels analyzing and decomposing task into manageable subtasks
 """
 
+internal const val CODER_DESCRIPTION = """
+An Senior Software engineer in Kotlin technology.
+your role is to create clear, concise, idiomatic and bug-free Kotlin code. 
+"""
+
 internal fun FINAL_PLAN_REDACTION(answerPlan: String) = """
 Here is the plan of action that I will follow to solve the task:
 ```

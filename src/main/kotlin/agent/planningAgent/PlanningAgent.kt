@@ -173,6 +173,10 @@ class PlanningAgent(
                     |   ${planningHistory.last().plan}
                 """.trimMargin())
             }
+            println("""
+                planning in process:
+                ${planningHistory.last()}
+            """.trimIndent())
             currentStep = remainingStep
         }
         return planningHistory.last().plan.value

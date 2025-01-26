@@ -2,19 +2,13 @@ package agent
 
 import agent.KotlinScriptExecutor.CommandResult
 import agent.planningAgent.AgentikAgent
+import agent.planningAgent.CODER_DESCRIPTION
+import agent.planningAgent.TASK_PLANNER_DESCRIPTION
 import agent.planningAgent.createAgentsDescriptions
-import dev.langchain4j.agent.tool.Tool
+import models.AgentikModel
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
-
-class FinalAnswer : AgentikTool {
-
-    @Tool("Called to submit final answer")
-    fun finalAnswer(value: String): String {
-        return value
-    }
-}
 
 
 class KotlinScriptExecutor {
@@ -115,12 +109,15 @@ class KotlinScriptExecutor {
 
 
 class CodeAgent(
-    private val tools: List<AgentikTool>,
-    private val agents: List<AgentikAgent>
-) {
+    override val name: String = "Coding Agent",
+    override val description: String = CODER_DESCRIPTION,
+    private val modelName: String = "hermes3:3b",
+    private val modelType: AgentikModel = AgentikModel.Ollama,
+    private val tools: List<AgentikTool> = emptyList(),
+    private val agents: List<AgentikAgent> = emptyList(),
+) : AgentikAgent {
 
     private val kotlinExecution = KotlinScriptExecutor()
-
 
     fun generateCode(taskPrompt: String): String? {
         val systemPrompt = MultiStepAgentPrompts.CODE_SYSTEM_PROMPT(
@@ -129,7 +126,8 @@ class CodeAgent(
         val agent = Agentik(
             tools = tools + agents,
             systemPrompt = systemPrompt,
-            modelName = "hermes3:3b"
+            modelName = modelName,
+            modelType = modelType
         )
         val llmResponse = agent.execute(taskPrompt)
         println(
@@ -142,7 +140,7 @@ class CodeAgent(
         return code
     }
 
-    fun fixCode(task: String, code: String?, pastExecutionResult: KotlinScriptExecutor.CommandResult?): String? {
+    fun fixCode(task: String, code: String?, pastExecutionResult: CommandResult?): String? {
         val fixCodePrompt = buildString {
             appendLine("For task: $task")
             append("Previous generated code $code, encountered following issues:")
@@ -153,7 +151,7 @@ class CodeAgent(
         return generateCode(fixCodePrompt)
     }
 
-    fun execute(task: String): String {
+    fun execute(task: String, maxRetry: Int): String {
 
         val taskPrompt = buildString {
             appendLine("Generate Kotlin programming lang to solve the following task:")
@@ -174,7 +172,7 @@ class CodeAgent(
         var executorResult: CommandResult? = kotlinExecution.executeCode(generatedCode)
         var isCodeExecutable = generatedCode != null && executorResult?.stdout?.isNotEmpty() == true
 
-        while (!isCodeExecutable && retry < 3) {
+        while (!isCodeExecutable && retry < maxRetry) {
             generatedCode = fixCode(task, generatedCode, executorResult)
             executorResult = kotlinExecution.executeCode(generatedCode)
             isCodeExecutable = generatedCode != null && executorResult?.stdout?.isNotEmpty() == true
@@ -183,7 +181,7 @@ class CodeAgent(
 
         println(executorResult?.stdout)
 
-        return ""
+        return executorResult?.stdout?: "Failed to respond!"
     }
 
     private fun extractCodeBlocks(response: String): String? {
@@ -196,5 +194,5 @@ class CodeAgent(
 
 fun main() {
     val codeAgent = CodeAgent(tools = emptyList(), agents = emptyList())
-    codeAgent.execute("Calculate 2^3.7384 and round to 2 decimal places")
+    codeAgent.execute("Calculate 2^3.7384 and round to 2 decimal places",1)
 }
