@@ -7,7 +7,7 @@ import dev.langchain4j.agent.tool.Tool
 import models.AgentikModel
 
 
-interface AgentikAgent {
+interface AgentikAgent : AgentikTool {
     val name: String
     val description: String
 }

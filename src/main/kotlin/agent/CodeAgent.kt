@@ -122,18 +122,22 @@ class CodeAgent(
     private val kotlinExecution = KotlinScriptExecutor()
 
 
-    fun generateCode(task: String): String? {
+    fun generateCode(taskPrompt: String): String? {
         val systemPrompt = MultiStepAgentPrompts.CODE_SYSTEM_PROMPT(
             managedAgentsDescriptions = createAgentsDescriptions(agents)
         )
         val agent = Agentik(
-            tools = tools,
-            systemPrompt = systemPrompt
+            tools = tools + agents,
+            systemPrompt = systemPrompt,
+            modelName = "hermes3:3b"
         )
-        val taskPrompt = buildString {
-            append(task)
-        }
         val llmResponse = agent.execute(taskPrompt)
+        println(
+            """
+            llmResponse:
+            $llmResponse
+        """.trimIndent()
+        )
         val code = extractCodeBlocks(llmResponse)
         return code
     }
@@ -151,7 +155,12 @@ class CodeAgent(
 
     fun execute(task: String): String {
 
-        var generatedCode = generateCode(task)
+        val taskPrompt = buildString {
+            appendLine("Generate Kotlin programming lang to solve the following task:")
+            append(task)
+            appendLine("Don't use python programming lang")
+        }
+        var generatedCode = generateCode(taskPrompt)
 
         println(
             """
@@ -161,20 +170,14 @@ class CodeAgent(
         )
 
         // Execute code
-        var executorResult: CommandResult? = kotlinExecution.executeCode(generatedCode)
         var retry = 0
-        val isCodeValid = generatedCode != null && executorResult?.stdout?.isNotEmpty() == false
-        while (!isCodeValid && retry < 3) {
+        var executorResult: CommandResult? = kotlinExecution.executeCode(generatedCode)
+        var isCodeExecutable = generatedCode != null && executorResult?.stdout?.isNotEmpty() == true
+
+        while (!isCodeExecutable && retry < 3) {
             generatedCode = fixCode(task, generatedCode, executorResult)
-
-            println(
-                """
-            fixed code $retry:
-            $generatedCode
-        """.trimIndent()
-            )
-            executorResult = kotlinExecution.executeCode(generatedCode ?: "")
-
+            executorResult = kotlinExecution.executeCode(generatedCode)
+            isCodeExecutable = generatedCode != null && executorResult?.stdout?.isNotEmpty() == true
             retry += 1
         }
 
