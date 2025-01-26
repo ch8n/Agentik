@@ -17,7 +17,7 @@ data class ReasonActionAgent(
     )
 
     fun execute(task: String, maxSteps: Int = 6) {
-        val taskExecutionPlan = planner.execute(task, maxSteps)
+        val taskExecutionPlan = planner.execute(task, maxSteps/2)
         println("""
             taskExecutionPlan
             $taskExecutionPlan
@@ -41,7 +41,8 @@ data class ReasonActionAgent(
 fun main() {
     val reasonActionAgent = ReasonActionAgent()
     reasonActionAgent.execute("""
-        write a program to create diamond shape on console using character `$`
+        write a program to create print sqaure shape on console using character `$`,
+        side of square will be of 6 units
     """.trimIndent(), 3)
 }
 
