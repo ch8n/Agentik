@@ -1,4 +1,5 @@
-import agent.Agentik
+import `01-chat-models`.OllamaAgentikModel
+import `03-agents`.Agentik
 import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,16 +14,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.util.fastJoinToString
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import dev.langchain4j.data.message.AiMessage
-import dev.langchain4j.data.message.ChatMessageType
-import dev.langchain4j.data.message.SystemMessage
-import dev.langchain4j.data.message.ToolExecutionResultMessage
-import dev.langchain4j.data.message.UserMessage
-import functions.maths.MathsKtx
-import functions.websearch.WebSearchKtx
+import `02-functions`.maths.MathsKtx
+import `02-functions`.websearch.WebSearchKtx
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -39,6 +34,7 @@ fun App() {
 
             val agentik = remember {
                 Agentik(
+                    chatModel = OllamaAgentikModel,
                     systemPrompt = """
                         You run in a loop of Thought, agent.planningAgent.Action, PAUSE, agent.planningAgent.Observation.
                         At the end of the loop you output an Answer

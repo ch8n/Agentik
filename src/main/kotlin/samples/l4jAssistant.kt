@@ -1,12 +1,10 @@
 package samples
 
-import dev.langchain4j.model.input.Prompt
 import dev.langchain4j.model.ollama.OllamaChatModel
 import dev.langchain4j.service.AiServices
 import dev.langchain4j.service.SystemMessage
-import dev.langchain4j.service.UserMessage
-import functions.maths.MathsKtx
-import functions.websearch.WebSearchKtx
+import `02-functions`.maths.MathsKtx
+import `02-functions`.websearch.WebSearchKtx
 import memory.sessions.SessionStorage
 
 

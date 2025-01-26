@@ -1,10 +1,9 @@
-package functions.webscaper
+package `02-functions`.webscaper
 
-import agent.AgentikTool
+import `02-functions`.AgentikTool
 import dev.langchain4j.agent.tool.Tool
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
-import java.io.IOException
 
 fun main() {
     val site = JsoupKtx().scrapeSiteAsString("https://www.phidata.com")

@@ -1,6 +1,6 @@
-package functions.maths
+package `02-functions`.maths
 
-import agent.AgentikTool
+import `02-functions`.AgentikTool
 import dev.langchain4j.agent.tool.Tool
 import kotlin.math.*
 

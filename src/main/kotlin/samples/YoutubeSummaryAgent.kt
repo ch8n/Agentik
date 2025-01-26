@@ -1,14 +1,15 @@
-package workflows
+package samples
 
-import agent.Agentik
-import functions.youtube.YoutubeKtx
 import kotlinx.coroutines.runBlocking
-import models.AgentikModel
+import `01-chat-models`.AgentikModel
+import `01-chat-models`.OllamaAgentikModel
+import `02-functions`.AgentikTool
+import `03-agents`.Agentik
 
 
 class YoutubeAgent(
-    private val model: AgentikModel = AgentikModel.Ollama,
-    private val modelName: String = "qwen2.5-coder:7b-instruct-q4_K_M",
+    val chatModel: AgentikModel,
+    val tools: List<AgentikTool> = emptyList()
 ) {
     fun execute(prompt: String): String? {
         val summarizePrompt = """
@@ -27,14 +28,11 @@ class YoutubeAgent(
 
             Ensure the extracted information is clear, structured, and easy to understand.
         """.trimIndent()
-
         val agent = Agentik(
             systemPrompt = summarizePrompt,
-            modelType = model,
-            modelName = modelName,
-            tools = listOf(YoutubeKtx()),
+            chatModel = chatModel,
+            tools = tools
         )
-
         return agent.execute(prompt)
     }
 }
@@ -42,7 +40,7 @@ class YoutubeAgent(
 
 // Usage Example
 fun main() = runBlocking {
-    val youtubeAgent = YoutubeAgent()
+    val youtubeAgent = YoutubeAgent(chatModel = OllamaAgentikModel)
 
     try {
         val result = youtubeAgent.execute("""

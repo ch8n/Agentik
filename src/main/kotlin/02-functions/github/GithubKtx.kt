@@ -1,11 +1,10 @@
-package functions.github
+package `02-functions`.github
 
-import agent.AgentikTool
+import `02-functions`.AgentikTool
 import dev.langchain4j.agent.tool.Tool
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.diff.DiffEntry
 import org.eclipse.jgit.diff.DiffFormatter
-import org.eclipse.jgit.lib.Constants
 import org.eclipse.jgit.lib.Repository
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder
 import org.eclipse.jgit.treewalk.CanonicalTreeParser

@@ -1,16 +1,12 @@
-package agent.planningAgent
+package `03-agents`.default.planningAgent
 
-import agent.Agentik
-import agent.AgentikTool
+import `01-chat-models`.AgentikModel
+import `01-chat-models`.OllamaAgentikModel
+import `02-functions`.AgentikTool
+import `03-agents`.Agentik
+import `03-agents`.AgentikAgent
 import dev.langchain4j.agent.tool.P
 import dev.langchain4j.agent.tool.Tool
-import models.AgentikModel
-
-
-interface AgentikAgent : AgentikTool {
-    val name: String
-    val description: String
-}
 
 
 @JvmInline
@@ -33,8 +29,7 @@ fun createAgentsDescriptions(agents: List<AgentikAgent>): String {
 class PlanningAgent(
     override val name: String = "Task Planner",
     override val description: String = TASK_PLANNER_DESCRIPTION,
-    private val modelName: String = "llama3.2:latest",
-    private val modelType: AgentikModel = AgentikModel.Ollama,
+    val chatModel: AgentikModel,
     private val tools: List<AgentikTool> = emptyList(),
     private val agents: List<AgentikAgent> = emptyList(),
 ) : AgentikAgent {
@@ -44,18 +39,16 @@ class PlanningAgent(
 
     private fun initialPlan(task: String): PlanningDecision {
         val planningAgentPhase1 = Agentik(
-            modelType = modelType,
-            modelName = modelName,
-            tools = tools,
-            systemPrompt = SYSTEM_PROMPT_FACTS
+            systemPrompt = SYSTEM_PROMPT_FACTS,
+            chatModel = chatModel,
+            tools = tools
         )
 
         val answerFacts = planningAgentPhase1
             .execute(USER_PROMPT_TASK(task))
 
         val planningAgentPhase2 = Agentik(
-            modelType = modelType,
-            modelName = modelName,
+            chatModel = chatModel,
             tools = tools,
             systemPrompt = SYSTEM_PROMPT_PLAN
         )
@@ -93,8 +86,7 @@ class PlanningAgent(
         }
 
         val planningAgentPhase1 = Agentik(
-            modelType = modelType,
-            modelName = modelName,
+            chatModel = chatModel,
             tools = tools,
             systemPrompt = systemPromptFactsWithHistory
         )
@@ -108,8 +100,7 @@ class PlanningAgent(
         }
 
         val planningAgentPhase2 = Agentik(
-            modelType = modelType,
-            modelName = modelName,
+            chatModel = chatModel,
             tools = tools,
             systemPrompt = systemPromptPlanWithHistory
         )
@@ -184,7 +175,7 @@ class PlanningAgent(
 }
 
 fun main() {
-    val plannerAgent = PlanningAgent()
+    val plannerAgent = PlanningAgent(chatModel = OllamaAgentikModel)
     plannerAgent.execute(
         """
             I have a software engineer named SE, and QA who create unit testcases, how to create code and test cycle

@@ -1,8 +1,8 @@
-package functions.youtube
+package `02-functions`.youtube
 
-import agent.AgentikTool
+import `02-functions`.AgentikTool
+import `02-functions`.webscaper.JsoupKtx
 import dev.langchain4j.agent.tool.Tool
-import functions.webscaper.JsoupKtx
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException

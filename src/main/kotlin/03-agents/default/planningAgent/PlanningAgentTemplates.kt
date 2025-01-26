@@ -1,4 +1,4 @@
-package agent.planningAgent
+package `03-agents`.default.planningAgent
 
 import androidx.compose.ui.util.fastJoinToString
 

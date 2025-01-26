@@ -1,9 +1,7 @@
-package functions.commandline
+package `02-functions`.commandline
 
-import agent.AgentikTool
+import `02-functions`.AgentikTool
 import dev.langchain4j.agent.tool.Tool
-import kotlinx.coroutines.delay
-import org.testcontainers.containers.Container
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.utility.DockerImageName
 

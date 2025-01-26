@@ -1,7 +1,7 @@
-package agent
+package `03-agents`.default
 
-import agent.planningAgent.PlanningAgent
-import agent.planningAgent.createAgentsDescriptions
+import `01-chat-models`.OllamaAgentikModel
+import `03-agents`.default.planningAgent.PlanningAgent
 
 data class ReasonActionAgent(
     val systemPrompt: String = MultiStepAgentPrompts.CODE_SYSTEM_PROMPT(
@@ -9,19 +9,21 @@ data class ReasonActionAgent(
     ),
 ) {
     val codeAgent = CodeAgent(
-        modelName = "hermes3:3b"
+        chatModel = OllamaAgentikModel
     )
 
     val planner = PlanningAgent(
-        modelName = "hermes3:3b"
+        chatModel = OllamaAgentikModel
     )
 
     fun execute(task: String, maxSteps: Int = 6) {
-        val taskExecutionPlan = planner.execute(task, maxSteps/2)
-        println("""
+        val taskExecutionPlan = planner.execute(task, maxSteps / 2)
+        println(
+            """
             taskExecutionPlan
             $taskExecutionPlan
-        """.trimIndent())
+        """.trimIndent()
+        )
         val codingTaskPrompt = buildString {
             appendLine("For the following task:")
             appendLine(task)
@@ -30,20 +32,24 @@ data class ReasonActionAgent(
             appendLine("write kotlin programming lang code that solves it.")
         }
         val result = codeAgent.execute(codingTaskPrompt, maxSteps)
-        println("""
+        println(
+            """
             reactResult : 
             $result
-        """.trimIndent())
+        """.trimIndent()
+        )
     }
 
 }
 
 fun main() {
     val reasonActionAgent = ReasonActionAgent()
-    reasonActionAgent.execute("""
+    reasonActionAgent.execute(
+        """
         write a program to create print sqaure shape on console using character `$`,
         side of square will be of 6 units
-    """.trimIndent(), 3)
+    """.trimIndent(), 3
+    )
 }
 
 

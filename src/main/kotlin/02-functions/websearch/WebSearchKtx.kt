@@ -1,11 +1,11 @@
-package functions.websearch
+package `02-functions`.websearch
 
-import agent.AgentikTool
+import `02-functions`.AgentikTool
+import `02-functions`.webscaper.JsoupKtx
 import com.microsoft.playwright.BrowserType.LaunchOptions
 import com.microsoft.playwright.Page
 import com.microsoft.playwright.Playwright
 import dev.langchain4j.agent.tool.Tool
-import functions.webscaper.JsoupKtx
 import java.net.URLEncoder
 
 data class SearchResult(val title: String, val url: String)

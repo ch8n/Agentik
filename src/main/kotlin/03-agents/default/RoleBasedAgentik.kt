@@ -1,32 +1,39 @@
-package agent
+package `03-agents`.default
 
-import agent.planningAgent.AgentikAgent
-import models.AgentikModel
+import `01-chat-models`.AgentikModel
+import `02-functions`.AgentikTool
+import `03-agents`.Agentik
+import `03-agents`.AgentikAgent
 
-object AgentDefaults {
-    val modelName: String = "llama3.2:latest"
-    val modelType: AgentikModel = AgentikModel.Ollama
-}
-
-data class RoleBasedAgent(
+data class RoleBasedAgentik(
     override val name: String,
     override val description: String,
-    val modelType: AgentikModel = AgentDefaults.modelType,
-    val modelName: String = AgentDefaults.modelName,
+    val chatModel: AgentikModel,
     val tools: List<AgentikTool> = emptyList(),
 ) : AgentikAgent {
 
-    private val agent = Agentik(
-        modelType = modelType,
-        modelName = modelName,
-        tools = tools
-    )
-
     fun execute(task: String): String {
-        val prompt = ManagedAgentPrompts.AGENT_PROMPT(
-            name = name, task = task, description = description
+        val systemPrompt = ManagedAgentPrompts.ROLE_BASE_AGENT_PROMPT(
+            name = name,
+            description = description
         )
-        val output = agent.execute(prompt)
+
+        val agent = Agentik(
+            chatModel = chatModel,
+            tools = tools,
+            systemPrompt = systemPrompt
+        )
+
+        val taskPrompt = buildString {
+            appendLine(
+                """
+                Manager has given you following task:
+                ${task}
+            """.trimIndent()
+            )
+        }
+        val output = agent.execute(taskPrompt)
+
         val summary = buildString {
             appendLine("Here is the final answer from your managed agent '$name':")
             append(output)
@@ -38,24 +45,20 @@ data class RoleBasedAgent(
             }
             appendLine("END OF SUMMARY OF WORK FROM AGENT '$name'.")
         }
+
         return summary
     }
 }
 
 
 object ManagedAgentPrompts {
-    fun AGENT_PROMPT(
+    fun ROLE_BASE_AGENT_PROMPT(
         name: String,
-        task: String,
         description: String
     ) = """
 You're a helpful agent named '${name}', $description.
-You have been submitted this task by your manager.
----
-Task:
-${task}
----
-You're helping your manager solve a wider task: so make sure to not provide a one-line answer, 
+You will be provided with a task by your manager. 
+your aim is to help your manager solve a wider task: so make sure to not provide a one-line answer, 
 but give as much information as possible to give them a clear understanding of the answer.
 
 Your final_answer WILL HAVE to contain these parts:
