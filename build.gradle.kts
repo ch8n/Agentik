@@ -34,6 +34,13 @@ dependencies {
 
     implementation("org.xerial:sqlite-jdbc:3.36.0.3")
     implementation("com.github.serenadeai:java-tree-sitter:1.1.2")
+
+    val ktor_version="3.1.0"
+    implementation("io.ktor:ktor-client-core:$ktor_version")
+    implementation("io.ktor:ktor-client-cio:$ktor_version")
+
+    implementation("org.neo4j.driver:neo4j-java-driver:5.9.0")
+
     implementation(kotlin("test"))
 }
 
