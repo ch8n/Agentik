@@ -16,6 +16,12 @@ class Sqlite(dbName: String) {
 
 class CodeEmbedding {
 
+    init {
+        val libraryPath = "/path/to/libjava-tree-sitter.so"
+        System.load(libraryPath)
+        
+    }
+
 }
 
 class SimilaritySearch {
