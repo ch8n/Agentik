@@ -33,7 +33,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
 
     implementation("org.xerial:sqlite-jdbc:3.36.0.3")
-    implementation("com.github.serenadeai:java-tree-sitter:1.1.2")
 
     val ktor_version="3.1.0"
     implementation("io.ktor:ktor-client-core:$ktor_version")
