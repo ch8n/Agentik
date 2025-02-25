@@ -47,6 +47,8 @@ dependencies {
 
     implementation(kotlin("test"))
 
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.0")
+
     implementation("org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.0") // Use the latest Kotlin Compiler version
     implementation("org.jetbrains.intellij.deps:trove4j:1.0.20181211") // Required for PSI Parsing
 }
