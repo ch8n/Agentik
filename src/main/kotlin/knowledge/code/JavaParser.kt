@@ -36,9 +36,8 @@ data class JavaMethodBreakDown(
 )
 
 data class JavaFileBreakdown(
-    val topLevelMethods: List<JavaMethodBreakDown>,
-    val topLevelProperties: List<JavaProperty>,
-    val classBreakdowns: List<JavaClassBreakDown>
+    val classBreakdowns: List<JavaClassBreakDown>,
+    val entireFileCode: String
 )
 
 
@@ -99,17 +98,15 @@ fun extractJavaClassInfo(psiClass: PsiClass): JavaClassBreakDown {
 
 fun parseJavaCode(sourceCode: String): JavaFileBreakdown {
     val configuration = CompilerConfiguration()
-    val kotlinEnv =
-        KotlinCoreEnvironment.createForProduction(Disposable {}, configuration, EnvironmentConfigFiles.JVM_CONFIG_FILES)
+    val kotlinEnv = KotlinCoreEnvironment.createForProduction(Disposable {}, configuration, EnvironmentConfigFiles.JVM_CONFIG_FILES)
     val psiFactory = PsiFileFactory.getInstance(kotlinEnv.project)
     val javaFile = psiFactory.createFileFromText("temp.java", JavaLanguage.INSTANCE, sourceCode) as PsiJavaFile
 
     val classBreakdowns = javaFile.classes.map { extractJavaClassInfo(it) }
 
     return JavaFileBreakdown(
-        topLevelMethods = classBreakdowns.flatMap { it.classMethods },
-        topLevelProperties = classBreakdowns.flatMap { it.classFields },
-        classBreakdowns = classBreakdowns
+        classBreakdowns = classBreakdowns,
+        entireFileCode = sourceCode
     )
 }
 

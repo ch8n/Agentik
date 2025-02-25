@@ -59,7 +59,8 @@ data class TopLevelProperty(
 data class KotlinFileBreakdown(
     val topLevelFunctions: List<TopLevelFunction>,
     val topLevelProperties: List<TopLevelProperty>,
-    val classBreakdowns: List<ClassBreakDown>
+    val classBreakdowns: List<ClassBreakDown>,
+    val entireFileCode: String
 )
 
 
@@ -174,8 +175,7 @@ fun extractClassMethods(klass: KtClass): ArrayList<ClassMethodBreakDown> {
 // Function to parse Kotlin source code
 fun parseKotlinCode(sourceCode: String): KotlinFileBreakdown {
     val configuration = CompilerConfiguration()
-    val kotlinEnv =
-        KotlinCoreEnvironment.createForProduction(Disposable {}, configuration, EnvironmentConfigFiles.JVM_CONFIG_FILES)
+    val kotlinEnv = KotlinCoreEnvironment.createForProduction(Disposable {}, configuration, EnvironmentConfigFiles.JVM_CONFIG_FILES)
     val psiFactory = PsiFileFactory.getInstance(kotlinEnv.project)
     val ktFile = psiFactory.createFileFromText("temp.kt", KotlinLanguage.INSTANCE, sourceCode) as KtFile
 
@@ -203,7 +203,8 @@ fun parseKotlinCode(sourceCode: String): KotlinFileBreakdown {
     return KotlinFileBreakdown(
         topLevelFunctions = extractTopLevelFunctions(ktFile),
         topLevelProperties = extractTopLevelProperties(ktFile),
-        classBreakdowns = classBreakdowns
+        classBreakdowns = classBreakdowns,
+        entireFileCode = sourceCode
     )
 }
 
