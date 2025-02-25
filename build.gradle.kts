@@ -4,6 +4,7 @@ plugins {
     kotlin("jvm")
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
+    kotlin("plugin.serialization") version "1.9.10"
 }
 
 group = "dev.ch8n"
@@ -29,18 +30,25 @@ dependencies {
     implementation("org.testcontainers:testcontainers:1.20.4")
 
     implementation("org.jetbrains.kotlin:kotlin-scripting-jsr223:1.9.20")
-    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
 
     implementation("org.xerial:sqlite-jdbc:3.36.0.3")
 
-    val ktor_version="3.1.0"
+
+    val ktor_version = "3.1.0"
     implementation("io.ktor:ktor-client-core:$ktor_version")
     implementation("io.ktor:ktor-client-cio:$ktor_version")
+    implementation("io.ktor:ktor-client-content-negotiation:$ktor_version")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
+
 
     implementation("org.neo4j.driver:neo4j-java-driver:5.9.0")
+    implementation("com.kuzudb:kuzu:0.8.0")
 
     implementation(kotlin("test"))
+
+    implementation("org.jetbrains.kotlin:kotlin-compiler-embeddable:1.9.0") // Use the latest Kotlin Compiler version
+    implementation("org.jetbrains.intellij.deps:trove4j:1.0.20181211") // Required for PSI Parsing
 }
 
 compose.desktop {

@@ -1,16 +1,24 @@
 package knowledge.code
 
+import com.kuzudb.Connection
+import com.kuzudb.Database
+import com.kuzudb.FlatTuple
+import com.kuzudb.PreparedStatement
+import com.kuzudb.Value
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.*
 import kotlinx.serialization.json.*
 import org.neo4j.driver.*
 import java.io.File
 import java.util.regex.Pattern
+
 
 // ==================== Data Models ====================
 
@@ -42,6 +50,14 @@ private data class LLMResponse(val result: String)
 
 // ==================== Phase 1: Code Preprocessing using TreeSitter ====================
 
+val client = HttpClient(CIO) {
+    install(ContentNegotiation) {
+        json(Json {
+            ignoreUnknownKeys = true
+            prettyPrint = true
+        })
+    }
+}
 
 /**
  * CodeParser uses TreeSitter to parse a given Android codebase (Java, Kotlin, XML).
@@ -52,7 +68,11 @@ private data class LLMResponse(val result: String)
 private object CodeParser {
 
     // Recursively scan a directory for files with given extensions.
-    fun scanCodebase(rootPath: String, extensions: List<String> = listOf("kt", "java", "xml")): List<File> {
+    fun scanCodebase(
+        rootPath: String,
+        //extensions: List<String> = listOf("kt", "java", "xml")
+        extensions: List<String> = listOf("kt")
+    ): List<File> {
         val files = mutableListOf<File>()
         File(rootPath).walkTopDown()
             .forEach { file ->
@@ -162,7 +182,6 @@ private object CodeParser {
 // ==================== Phase 2: Embedding Generation & Entity Extraction ====================
 
 private object EmbeddingService {
-    private val client = HttpClient(CIO)
 
     /**
      * Get the embedding for the given text using Ollama Nomic model.
@@ -170,9 +189,21 @@ private object EmbeddingService {
      */
     suspend fun getEmbedding(text: String): List<Float> {
         try {
-            val response = client.post("http://localhost:11434/v1/embed") {
+            val body = Json.encodeToJsonElement(
+                mapOf(
+                    "model" to "nomic-embed-text:latest",
+                    "input" to text,
+                    "options" to Json.encodeToString(
+                        mapOf(
+                            "temperature" to "1"
+                        )
+                    ),
+                    "stream" to "false"
+                )
+            )
+            val response = client.post("http://localhost:11434/api/embed") {
                 contentType(ContentType.Application.Json)
-                setBody(Json.encodeToJsonElement(mapOf("text" to text, "model" to "nomic-embed-text")))
+                setBody(body)
             }
             val embeddingResponse = Json.decodeFromString<EmbeddingResponse>(response.bodyAsText())
             return embeddingResponse.embedding
@@ -184,7 +215,6 @@ private object EmbeddingService {
 }
 
 private object EntityExtractor {
-    private val client = HttpClient(CIO)
 
     /**
      * Extract entities and relationships from a code chunk using Ollama Qwen 2.5.
@@ -232,7 +262,7 @@ private object EntityExtractor {
 
 // ==================== Phase 3: Graph Construction & Deduplication (Neo4j) ====================
 
-private object GraphService {
+private object GraphServiceBackup {
     // Connect to local Neo4j database – adjust credentials as necessary.
     private val driver: Driver = GraphDatabase.driver("bolt://localhost:7687", AuthTokens.basic("neo4j", "password"))
 
@@ -333,10 +363,140 @@ private object GraphService {
     }
 }
 
+private object GraphService {
+    // Create an in-memory database
+    private val db = Database(":memory:")
+    private val conn = Connection(db)
+
+    fun String.prep(): PreparedStatement = conn.prepare(this)
+
+    // Create schema
+    init {
+        conn.execute(
+            "CREATE NODE TABLE Entity(name STRING, type STRING, description STRING, source STRING, PRIMARY KEY (name))".prep(),
+            mutableMapOf()
+        )
+        conn.execute(
+            "CREATE REL TABLE Relation(FROM Entity TO Entity, type STRING, description STRING, source STRING)".prep(),
+            mutableMapOf()
+        )
+    }
+
+    fun close() {
+        conn.close()
+    }
+
+    // Upsert an entity (by name) into Kùzu.
+    fun upsertEntity(entity: Entity) {
+        conn.execute(
+            """
+            MERGE (e:Entity {name: $${'$'}name})
+            ON CREATE SET e.type = $${'$'}type, e.description = $${'$'}description, e.source = $${'$'}source
+            ON MATCH SET e.type = $${'$'}type, e.description = $${'$'}description, e.source = $${'$'}source
+            """.trimIndent().prep(),
+            mutableMapOf(
+                "name" to entity.name,
+                "type" to entity.type,
+                "description" to entity.description,
+                "source" to entity.source
+            ).map { it.key to Value(it.value) }.toMap()
+        )
+    }
+
+    // Insert a relation between two entities. Assumes both entities exist.
+    fun insertRelation(relation: Relation) {
+        conn.execute(
+            """
+            MATCH (a:Entity {name: $${'$'}sourceName}), (b:Entity {name: $${'$'}targetName})
+            MERGE (a)-[r:Relation {type: $${'$'}relationType}]->(b)
+            ON CREATE SET r.description = $${'$'}description, r.source = $${'$'}source
+            ON MATCH SET r.description = $${'$'}description, r.source = $${'$'}source
+            """.trimIndent().prep(),
+            mapOf(
+                "sourceName" to relation.sourceEntity,
+                "targetName" to relation.targetEntity,
+                "relationType" to relation.relationType,
+                "description" to relation.description,
+                "source" to relation.source
+            ).map { it.key to Value(it.value) }.toMap()
+        )
+    }
+
+    // Retrieve entities using a low-level keyword search (by name).
+    fun retrieveEntitiesByKeyword(keyword: String): List<Entity> {
+        val result = conn.execute(
+            """
+            MATCH (e:Entity)
+            WHERE toLower(e.name) CONTAINS toLower($${'$'}keyword)
+            RETURN e.name as name, e.type as type, e.description as description, e.source as source
+            """.trimIndent().prep(),
+            mapOf("keyword" to keyword).map { it.key to Value(it.value) }.toMap()
+        )
+
+        return buildList {
+            while (result.hasNext()) {
+                val value: FlatTuple = result.next
+                add(
+                    Entity(
+                        name = value.getValue(0).toString(),
+                        type = value.getValue(1).toString(),
+                        description = value.getValue(2).toString(),
+                        source = value.getValue(3).toString(),
+                    )
+                )
+            }
+        }
+
+//        return result.map { record ->
+//            Entity(
+//                name = record["name"].asString(),
+//                type = record["type"].asString(),
+//                description = record["description"].asString(),
+//                source = record["source"].asString()
+//            )
+//        }
+    }
+
+    // Retrieve entities by theme (searching within descriptions).
+    fun retrieveEntitiesByTheme(theme: String): List<Entity> {
+        val result = conn.execute(
+            """
+            MATCH (e:Entity)
+            WHERE toLower(e.description) CONTAINS toLower($${'$'}theme)
+            RETURN e.name as name, e.type as type, e.description as description, e.source as source
+            """.trimIndent().prep(),
+            mapOf("theme" to theme).map { it.key to Value(it.value) }.toMap()
+        )
+
+        return buildList {
+            while (result.hasNext()) {
+                val value: FlatTuple = result.next
+                add(
+                    Entity(
+                        name = value.getValue(0).toString(),
+                        type = value.getValue(1).toString(),
+                        description = value.getValue(2).toString(),
+                        source = value.getValue(3).toString(),
+                    )
+                )
+            }
+        }
+
+//        return result.map { record ->
+//            Entity(
+//                name = record["name"].asString(),
+//                type = record["type"].asString(),
+//                description = record["description"].asString(),
+//                source = record["source"].asString()
+//            )
+//        }
+    }
+}
+
+
 // ==================== Phase 4: Query Processing & Dual-Level Retrieval ====================
 
 private object QueryProcessor {
-    private val client = HttpClient(CIO)
 
     /**
      * Extract local and global keywords from a query using the LLM.
@@ -380,7 +540,6 @@ private object QueryProcessor {
 // ==================== Phase 5: Retrieval-Augmented Answer Generation ====================
 
 object AnswerGenerator {
-    private val client = HttpClient(CIO)
 
     /**
      * Generate an answer by combining the retrieved context and the original query.
@@ -390,9 +549,9 @@ object AnswerGenerator {
         val prompt = """
             Given the following context:
             $context
-            
+
             And the user query: "$query"
-            
+
             Generate a detailed, contextually accurate answer.
         """.trimIndent()
         try {
