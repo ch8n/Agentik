@@ -10,6 +10,10 @@ import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
 
 
+interface CodeBreakDown
+
+object NoCodeBreakdown: CodeBreakDown
+
 // Data classes to hold breakdown information
 data class ClassBreakDown(
     val className: String,
@@ -61,7 +65,7 @@ data class KotlinFileBreakdown(
     val topLevelProperties: List<TopLevelProperty>,
     val classBreakdowns: List<ClassBreakDown>,
     val entireFileCode: String
-)
+) : CodeBreakDown
 
 
 fun extractTopLevelProperties(ktFile: KtFile): List<TopLevelProperty> {

@@ -1,17 +1,18 @@
 package knowledge.code
 
-import com.kuzudb.Connection
-import com.kuzudb.Database
-import com.kuzudb.FlatTuple
-import com.kuzudb.PreparedStatement
+import com.kuzudb.*
 import com.kuzudb.Value
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.*
+import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.serialization.kotlinx.json.json
+import io.ktor.serialization.kotlinx.json.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.*
 import kotlinx.serialization.json.*
@@ -25,7 +26,7 @@ import java.util.regex.Pattern
 @Serializable
 private data class Entity(
     val name: String,
-    val type: String,
+    val entType: String,
     val description: String,
     val source: String
 )
@@ -51,6 +52,11 @@ private data class LLMResponse(val result: String)
 // ==================== Phase 1: Code Preprocessing using TreeSitter ====================
 
 val client = HttpClient(CIO) {
+    install(HttpTimeout) {
+        requestTimeoutMillis = 60_000  // 30 seconds
+        connectTimeoutMillis = 60_000  // Optional: 30s for establishing a connection
+        socketTimeoutMillis = 60_000   // Optional: 30s for data transfer
+    }
     install(ContentNegotiation) {
         json(Json {
             ignoreUnknownKeys = true
@@ -85,26 +91,11 @@ private object CodeParser {
 
 
     // For Kotlin files, extract classes/objects/interfaces and function declarations.
-    fun parseKotlinFile(file: File): List<String> {
-        val chunks = mutableListOf<String>()
+    fun parseKotlinFile(file: File): List<CodeBreakDown> {
+        val chunks = mutableListOf<CodeBreakDown>()
         try {
-            val content = file.readText()
-            // Regex for Kotlin classes, objects, interfaces (with optional modifiers)
-            val classPattern =
-                Pattern.compile("(?m)^\\s*(public\\s+|private\\s+|protected\\s+|internal\\s+)?(class|interface|object)\\s+\\w+")
-            // Regex for Kotlin function declarations
-            val funPattern =
-                Pattern.compile("(?m)^\\s*(public\\s+|private\\s+|protected\\s+|internal\\s+)?fun\\s+\\w+\\s*\\(.*?\\)\\s*(\\{|=)")
-            val classMatcher = classPattern.matcher(content)
-            while (classMatcher.find()) {
-                val match = classMatcher.group().trim()
-                chunks.add("File: ${file.absolutePath}\n$match")
-            }
-            val funMatcher = funPattern.matcher(content)
-            while (funMatcher.find()) {
-                val match = funMatcher.group().trim()
-                chunks.add("File: ${file.absolutePath}\n$match")
-            }
+            val breakdown = parseKotlinCode(file.readText())
+            chunks.add(breakdown)
         } catch (e: Exception) {
             println("Error parsing Kotlin file ${file.absolutePath}: ${e.message}")
         }
@@ -112,26 +103,11 @@ private object CodeParser {
     }
 
     // For Java files, extract classes/interfaces/enums and method declarations.
-    fun parseJavaFile(file: File): List<String> {
-        val chunks = mutableListOf<String>()
+    fun parseJavaFile(file: File): List<CodeBreakDown> {
+        val chunks = mutableListOf<CodeBreakDown>()
         try {
-            val content = file.readText()
-            // Regex for Java class, interface, and enum declarations
-            val classPattern =
-                Pattern.compile("(?m)^\\s*(public\\s+|private\\s+|protected\\s+)?(class|interface|enum)\\s+\\w+")
-            // Regex for Java method declarations (including return type, method name, parameters)
-            val methodPattern =
-                Pattern.compile("(?m)^\\s*(public\\s+|private\\s+|protected\\s+)?[\\w<>\\[\\]]+\\s+\\w+\\s*\\(.*?\\)\\s*(\\{|;)")
-            val classMatcher = classPattern.matcher(content)
-            while (classMatcher.find()) {
-                val match = classMatcher.group().trim()
-                chunks.add("File: ${file.absolutePath}\n$match")
-            }
-            val methodMatcher = methodPattern.matcher(content)
-            while (methodMatcher.find()) {
-                val match = methodMatcher.group().trim()
-                chunks.add("File: ${file.absolutePath}\n$match")
-            }
+            val breakdown = parseJavaCode(file.readText())
+            chunks.add(breakdown)
         } catch (e: Exception) {
             println("Error parsing Java file ${file.absolutePath}: ${e.message}")
         }
@@ -139,8 +115,9 @@ private object CodeParser {
     }
 
     // For XML files, use regex to extract all XML tags.
-    fun parseXmlFile(file: File): List<String> {
-        val chunks = mutableListOf<String>()
+    fun parseXmlFile(file: File): List<CodeBreakDown> {
+        return emptyList()
+        val chunks = mutableListOf<CodeBreakDown>()
         try {
             val content = file.readText()
             // General regex to match any XML tag with its content (non-greedy for inner content)
@@ -148,7 +125,7 @@ private object CodeParser {
             val matcher = xmlPattern.matcher(content)
             while (matcher.find()) {
                 val match = matcher.group().trim()
-                chunks.add("File: ${file.absolutePath}\n$match")
+                //chunks.add("File: ${file.absolutePath}\n$match")
             }
         } catch (e: Exception) {
             println("Error parsing XML file ${file.absolutePath}: ${e.message}")
@@ -157,7 +134,7 @@ private object CodeParser {
     }
 
     // Choose parser based on file extension.
-    fun parseFile(file: File): List<String> {
+    fun parseFile(file: File): List<CodeBreakDown> {
         return when (file.extension.lowercase()) {
             "kt" -> parseKotlinFile(file)
             "java" -> parseJavaFile(file)
@@ -167,8 +144,8 @@ private object CodeParser {
     }
 
     // Process an entire codebase directory and return all extracted chunks.
-    fun parseCodebase(rootPath: String): List<String> {
-        val allChunks = mutableListOf<String>()
+    fun parseCodebase(rootPath: String): List<CodeBreakDown> {
+        val allChunks = mutableListOf<CodeBreakDown>()
         val files = scanCodebase(rootPath)
         files.forEach { file ->
             val fileChunks = parseFile(file)
@@ -187,12 +164,12 @@ private object EmbeddingService {
      * Get the embedding for the given text using Ollama Nomic model.
      * Uses endpoint "http://localhost:11434/v1/embed" with model "nomic-embed-text".
      */
-    suspend fun getEmbedding(text: String): List<Float> {
+    suspend fun getEmbedding(code: CodeBreakDown): List<Float> {
         try {
             val body = Json.encodeToJsonElement(
                 mapOf(
                     "model" to "nomic-embed-text:latest",
-                    "input" to text,
+                    "input" to code,
                     "options" to Json.encodeToString(
                         mapOf(
                             "temperature" to "1"
@@ -220,23 +197,96 @@ private object EntityExtractor {
      * Extract entities and relationships from a code chunk using Ollama Qwen 2.5.
      * The prompt is tailored for code analysis (classes, functions, etc.).
      */
-    suspend fun extractEntitiesAndRelations(chunk: String): Pair<List<Entity>, List<Relation>> {
+    suspend fun extractEntitiesAndRelations(entireCode: String, codeChunk: String): Pair<List<Entity>, List<Relation>> {
         val prompt = """
-            You are an expert code analyzer.
-            Extract a JSON with two arrays from the following code snippet:
+            You are an expert code analyzer. You have the following code:
+            $entireCode
+            
+            Extract a JSON object with two arrays from the following code snippet:
             - "entities": each object should have "name", "type" (e.g., "Class", "Function", "XMLLayout"), "description" (explain its role), and "source" (the file path if available).
             - "relations": each object should describe relationships between entities, with "sourceEntity", "targetEntity", "relationType" (e.g., "calls", "inherits", "contains"), "description", and "source".
             Code Snippet:
-            $chunk
+            $codeChunk
         """.trimIndent()
         try {
-            val response = client.post("http://localhost:11434/v1/complete") {
+            val response = client.post("http://localhost:11434/api/generate") {
                 contentType(ContentType.Application.Json)
                 // Use the Ollama Qwen 2.5 model for advanced entity extraction
-                setBody(Json.encodeToJsonElement(mapOf("prompt" to prompt, "model" to "qwen2.5")))
-            }
 
-            val llmResponse = Json.decodeFromString<LLMResponse>(response.bodyAsText())
+                val jsonRequest = buildJsonObject {
+                    put("prompt", prompt)
+                    put("model", "hermes3:3b")
+                    put("stream", false)
+
+                    put("format", buildJsonObject {
+                        put("title", "LLMResponse")
+                        put("type", "object")
+
+                        put("properties", buildJsonObject {
+                            put("entities", buildJsonObject {
+                                put("type", "array")
+                                put("items", buildJsonObject {
+                                    put("\$ref", "#/\$defs/Entity")
+                                })
+                            })
+
+                            put("relations", buildJsonObject {
+                                put("type", "array")
+                                put("items", buildJsonObject {
+                                    put("\$ref", "#/\$defs/Relation")
+                                })
+                            })
+                        })
+
+                        putJsonArray("required") {
+                            add("entities")
+                            add("relations")
+                        }
+
+                        put("\$defs", buildJsonObject {
+                            put("Entity", buildJsonObject {
+                                put("type", "object")
+                                put("properties", buildJsonObject {
+                                    put("name", buildJsonObject { put("type", "string") })
+                                    put("entType", buildJsonObject { put("type", "string") })
+                                    put("description", buildJsonObject { put("type", "string") })
+                                    put("source", buildJsonObject { put("type", "string") })
+                                })
+
+                                putJsonArray("required") {
+                                    add("name")
+                                    add("entType")
+                                    add("description")
+                                    add("source")
+                                }
+                            })
+
+                            put("Relation", buildJsonObject {
+                                put("type", "object")
+                                put("properties", buildJsonObject {
+                                    put("sourceEntity", buildJsonObject { put("type", "string") })
+                                    put("targetEntity", buildJsonObject { put("type", "string") })
+                                    put("relationType", buildJsonObject { put("type", "string") })
+                                    put("description", buildJsonObject { put("type", "string") })
+                                    put("source", buildJsonObject { put("type", "string") })
+                                })
+
+                                putJsonArray("required") {
+                                    add("sourceEntity")
+                                    add("targetEntity")
+                                    add("relationType")
+                                    add("description")
+                                    add("source")
+                                }
+                            })
+                        })
+                    })
+                }
+                setBody(jsonRequest)
+            }
+            val jsonObject = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+            val responseText = jsonObject["response"]?.jsonPrimitive?.content ?: ""
+            val llmResponse = LLMResponse(responseText)
             return parseExtractionResponse(llmResponse.result)
         } catch (e: Exception) {
             println("Error during entity extraction: ${e.message}")
@@ -276,13 +326,13 @@ private object GraphServiceBackup {
             session.writeTransaction { tx ->
                 tx.run(
                     """
-                    MERGE (e:Entity {name: $${'$'}name})
-                    ON CREATE SET e.type = $${'$'}type, e.description = $${'$'}description, e.source = $${'$'}source
-                    ON MATCH SET e.type = $${'$'}type, e.description = $${'$'}description, e.source = $${'$'}source
+                    MERGE (e:Entity {name: ${'$'}name})
+                    ON CREATE SET e.type = ${'$'}entType, e.description = ${'$'}description, e.source = ${'$'}source
+                    ON MATCH SET e.type = ${'$'}entType, e.description = ${'$'}description, e.source = ${'$'}source
                     """.trimIndent(),
                     mapOf(
                         "name" to entity.name,
-                        "type" to entity.type,
+                        "entType" to entity.entType,
                         "description" to entity.description,
                         "source" to entity.source
                     )
@@ -298,10 +348,10 @@ private object GraphServiceBackup {
             session.writeTransaction { tx ->
                 tx.run(
                     """
-                    MATCH (a:Entity {name: $${'$'}sourceName}), (b:Entity {name: $${'$'}targetName})
-                    MERGE (a)-[r:RELATION {type: $${'$'}relationType}]->(b)
-                    ON CREATE SET r.description = $${'$'}description, r.source = $${'$'}source
-                    ON MATCH SET r.description = $${'$'}description, r.source = $${'$'}source
+                    MATCH (a:Entity {name: ${'$'}sourceName}), (b:Entity {name: ${'$'}targetName})
+                    MERGE (a)-[r:RELATION {type: ${'$'}relationType}]->(b)
+                    ON CREATE SET r.description = ${'$'}description, r.source = ${'$'}source
+                    ON MATCH SET r.description = ${'$'}description, r.source = ${'$'}source
                     """.trimIndent(),
                     mapOf(
                         "sourceName" to relation.sourceEntity,
@@ -323,14 +373,14 @@ private object GraphServiceBackup {
                 val result = tx.run(
                     """
                     MATCH (e:Entity)
-                    WHERE toLower(e.name) CONTAINS toLower($${'$'}keyword)
+                    WHERE toLower(e.name) CONTAINS toLower(${'$'}keyword)
                     RETURN e.name as name, e.type as type, e.description as description, e.source as source
                     """.trimIndent(), mapOf("keyword" to keyword)
                 )
                 result.list { record ->
                     Entity(
                         name = record["name"].asString(),
-                        type = record["type"].asString(),
+                        entType = record["entType"].asString(),
                         description = record["description"].asString(),
                         source = record["source"].asString()
                     )
@@ -346,14 +396,14 @@ private object GraphServiceBackup {
                 val result = tx.run(
                     """
                     MATCH (e:Entity)
-                    WHERE toLower(e.description) CONTAINS toLower($${'$'}theme)
+                    WHERE toLower(e.description) CONTAINS toLower(${'$'}theme)
                     RETURN e.name as name, e.type as type, e.description as description, e.source as source
                     """.trimIndent(), mapOf("theme" to theme)
                 )
                 result.list { record ->
                     Entity(
                         name = record["name"].asString(),
-                        type = record["type"].asString(),
+                        entType = record["entType"].asString(),
                         description = record["description"].asString(),
                         source = record["source"].asString()
                     )
@@ -365,7 +415,7 @@ private object GraphServiceBackup {
 
 private object GraphService {
     // Create an in-memory database
-    private val db = Database(":memory:")
+    private val db = Database("./graph_db")
     private val conn = Connection(db)
 
     fun String.prep(): PreparedStatement = conn.prepare(this)
@@ -373,7 +423,7 @@ private object GraphService {
     // Create schema
     init {
         conn.execute(
-            "CREATE NODE TABLE Entity(name STRING, type STRING, description STRING, source STRING, PRIMARY KEY (name))".prep(),
+            "CREATE NODE TABLE Entity(name STRING, entType STRING, description STRING, source STRING, PRIMARY KEY (name))".prep(),
             mutableMapOf()
         )
         conn.execute(
@@ -388,15 +438,22 @@ private object GraphService {
 
     // Upsert an entity (by name) into Kùzu.
     fun upsertEntity(entity: Entity) {
-        conn.execute(
+        val result = conn.execute(
             """
-            MERGE (e:Entity {name: $${'$'}name})
-            ON CREATE SET e.type = $${'$'}type, e.description = $${'$'}description, e.source = $${'$'}source
-            ON MATCH SET e.type = $${'$'}type, e.description = $${'$'}description, e.source = $${'$'}source
+            MERGE (e:Entity {name: ${'$'}name})
+            ON CREATE SET 
+                e.entType = ${'$'}entType, 
+                e.description = ${'$'}description, 
+                e.source = ${'$'}source
+            ON MATCH SET 
+                e.entType = ${'$'}entType, 
+                e.description = ${'$'}description, 
+                e.source = ${'$'}source
+            RETURN e
             """.trimIndent().prep(),
             mutableMapOf(
                 "name" to entity.name,
-                "type" to entity.type,
+                "entType" to entity.entType,
                 "description" to entity.description,
                 "source" to entity.source
             ).map { it.key to Value(it.value) }.toMap()
@@ -405,12 +462,13 @@ private object GraphService {
 
     // Insert a relation between two entities. Assumes both entities exist.
     fun insertRelation(relation: Relation) {
-        conn.execute(
+        val result = conn.execute(
             """
-            MATCH (a:Entity {name: $${'$'}sourceName}), (b:Entity {name: $${'$'}targetName})
-            MERGE (a)-[r:Relation {type: $${'$'}relationType}]->(b)
-            ON CREATE SET r.description = $${'$'}description, r.source = $${'$'}source
-            ON MATCH SET r.description = $${'$'}description, r.source = $${'$'}source
+            MATCH (a:Entity {name: ${'$'}sourceName}), (b:Entity {name: ${'$'}targetName})
+            MERGE (a)-[r:Relation {type: ${'$'}relationType}]->(b)
+            ON CREATE SET r.description = ${'$'}description, r.source = ${'$'}source
+            ON MATCH SET r.description = ${'$'}description, r.source = ${'$'}source
+            RETURN r
             """.trimIndent().prep(),
             mapOf(
                 "sourceName" to relation.sourceEntity,
@@ -427,8 +485,8 @@ private object GraphService {
         val result = conn.execute(
             """
             MATCH (e:Entity)
-            WHERE toLower(e.name) CONTAINS toLower($${'$'}keyword)
-            RETURN e.name as name, e.type as type, e.description as description, e.source as source
+            WHERE LOWER(e.name) CONTAINS LOWER(${'$'}keyword)
+            RETURN e.name as name, e.entType as entType, e.description as description, e.source as source
             """.trimIndent().prep(),
             mapOf("keyword" to keyword).map { it.key to Value(it.value) }.toMap()
         )
@@ -439,22 +497,13 @@ private object GraphService {
                 add(
                     Entity(
                         name = value.getValue(0).toString(),
-                        type = value.getValue(1).toString(),
+                        entType = value.getValue(1).toString(),
                         description = value.getValue(2).toString(),
                         source = value.getValue(3).toString(),
                     )
                 )
             }
         }
-
-//        return result.map { record ->
-//            Entity(
-//                name = record["name"].asString(),
-//                type = record["type"].asString(),
-//                description = record["description"].asString(),
-//                source = record["source"].asString()
-//            )
-//        }
     }
 
     // Retrieve entities by theme (searching within descriptions).
@@ -462,8 +511,8 @@ private object GraphService {
         val result = conn.execute(
             """
             MATCH (e:Entity)
-            WHERE toLower(e.description) CONTAINS toLower($${'$'}theme)
-            RETURN e.name as name, e.type as type, e.description as description, e.source as source
+            WHERE LOWER(e.description) CONTAINS LOWER(${'$'}theme)
+            RETURN e.name as name, e.entType as entType, e.description as description, e.source as source
             """.trimIndent().prep(),
             mapOf("theme" to theme).map { it.key to Value(it.value) }.toMap()
         )
@@ -474,22 +523,37 @@ private object GraphService {
                 add(
                     Entity(
                         name = value.getValue(0).toString(),
-                        type = value.getValue(1).toString(),
+                        entType = value.getValue(1).toString(),
                         description = value.getValue(2).toString(),
                         source = value.getValue(3).toString(),
                     )
                 )
             }
         }
+    }
 
-//        return result.map { record ->
-//            Entity(
-//                name = record["name"].asString(),
-//                type = record["type"].asString(),
-//                description = record["description"].asString(),
-//                source = record["source"].asString()
-//            )
-//        }
+    fun retrieveAllEntities(): List<Entity> {
+        val result = conn.execute(
+            """
+        MATCH (e:Entity)
+        RETURN e.name as name, e.entType as entType, e.description as description, e.source as source
+        """.trimIndent().prep(),
+            emptyMap()
+        )
+
+        return buildList {
+            while (result.hasNext()) {
+                val value: FlatTuple = result.next
+                add(
+                    Entity(
+                        name = value.getValue(0).toString(),
+                        entType = value.getValue(1).toString(),
+                        description = value.getValue(2).toString(),
+                        source = value.getValue(3).toString(),
+                    )
+                )
+            }
+        }
     }
 }
 
@@ -512,11 +576,43 @@ private object QueryProcessor {
             { "local": ["keyword1", "keyword2"], "global": ["theme1", "theme2"] }
         """.trimIndent()
         try {
-            val response = client.post("http://localhost:11434/v1/complete") {
+            val response = client.post("http://localhost:11434/api/generate") {
                 contentType(ContentType.Application.Json)
-                setBody(Json.encodeToJsonElement(mapOf("prompt" to prompt, "model" to "qwen2.5")))
+                val jsonRequest = buildJsonObject {
+                    put("prompt", prompt)
+                    put("model", "hermes3:3b")
+                    put("stream", false)
+                    put(
+                        "format",
+                        buildJsonObject {
+                            put("type", "object")
+                            put("properties", buildJsonObject {
+                                put("local", buildJsonObject {
+                                    put("type", "array")
+                                    put("items", buildJsonObject {
+                                        put("type", "string")
+                                    })
+                                })
+                                put("global", buildJsonObject {
+                                    put("type", "array")
+                                    put("items", buildJsonObject {
+                                        put("type", "string")
+                                    })
+                                })
+                            })
+                            put("required", buildJsonArray {
+                                add("local")
+                                add("global")
+                            })
+                            put("additionalProperties", false)
+                        }
+                    )
+                }
+                setBody(jsonRequest)
             }
-            val llmResponse = Json.decodeFromString<LLMResponse>(response.bodyAsText())
+            val jsonObject = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+            val responseText = jsonObject["response"]?.jsonPrimitive?.content ?: ""
+            val llmResponse = LLMResponse(responseText)
             return parseKeywordResponse(llmResponse.result)
         } catch (e: Exception) {
             println("Error extracting query keywords: ${e.message}")
@@ -555,11 +651,17 @@ object AnswerGenerator {
             Generate a detailed, contextually accurate answer.
         """.trimIndent()
         try {
-            val response = client.post("http://localhost:11434/v1/complete") {
+            val response = client.post("http://localhost:11434/api/generate") {
                 contentType(ContentType.Application.Json)
-                setBody(Json.encodeToJsonElement(mapOf("prompt" to prompt, "model" to "qwen2.5")))
+                setBody(buildJsonObject {
+                    put("prompt", prompt)
+                    put("model", "hermes3:3b")
+                    put("stream", false)
+                })
             }
-            val llmResponse = Json.decodeFromString<LLMResponse>(response.bodyAsText())
+            val jsonObject = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+            val responseText = jsonObject["response"]?.jsonPrimitive?.content ?: ""
+            val llmResponse = LLMResponse(responseText)
             return llmResponse.result
         } catch (e: Exception) {
             println("Error generating answer: ${e.message}")
@@ -581,7 +683,8 @@ private object IncrementalUpdater {
             // Get embedding (if needed for future vector search)
             val embedding = EmbeddingService.getEmbedding(chunk)
             // Extract entities and relations using the advanced LLM extraction
-            val (entities, relations) = EntityExtractor.extractEntitiesAndRelations(chunk)
+            val (entities, relations) = Pair(listOf<Entity>(), listOf<Relation>())
+            //EntityExtractor.extractEntitiesAndRelations(chunk)
             // Upsert entities and insert relations into the graph
             entities.forEach { GraphService.upsertEntity(it) }
             relations.forEach { GraphService.insertRelation(it) }
@@ -591,64 +694,133 @@ private object IncrementalUpdater {
 
 // ==================== Main Flow: Tying It All Together ====================
 
-fun main() = runBlocking {
-    try {
-        // ---------- Phase 1: Code Ingestion & Preprocessing ----------
-        // Assume the Android project root is provided (adjust the path as needed)
-        val codeRootPath = File("").absolutePath
-        println(codeRootPath)
-        val codeChunks = CodeParser.parseCodebase(codeRootPath)
-        if (codeChunks.isEmpty()) {
-            println("No code chunks extracted from the project.")
-            return@runBlocking
-        }
 
-        // ---------- Phase 2 & 3: Process Each Code Chunk, Extract Entities & Build Graph ----------
-        codeChunks.forEach { chunk ->
+fun indexCodebase(basePath: String) = runBlocking {
+    // ---------- Phase 1: Code Ingestion & Preprocessing ----------
+    // Assume the Android project root is provided (adjust the path as needed)
+
+    val codeRootPath = File(basePath).absolutePath
+    println(codeRootPath)
+    val codeChunks = CodeParser.parseCodebase(codeRootPath)
+
+    if (codeChunks.isEmpty()) {
+        println("No code chunks extracted from the project.")
+        return@runBlocking
+    }
+
+    println(codeChunks)
+
+    // ---------- Phase 2 & 3: Process Each Code Chunk, Extract Entities & Build Graph ----------
+    codeChunks.map { chunk ->
+        async(Dispatchers.IO) {
             try {
                 // Get embedding for the chunk using Ollama Nomic
-                val embedding = EmbeddingService.getEmbedding(chunk)
+                //val embedding = EmbeddingService.getEmbedding(chunk)
                 // Extract entities and relations from the code chunk using Qwen 2.5
-                val (entities, relations) = EntityExtractor.extractEntitiesAndRelations(chunk)
+                val entities = mutableListOf<Entity>()
+                val relations = mutableListOf<Relation>()
+                when {
+                    chunk is KotlinFileBreakdown -> {
+                        chunk.topLevelFunctions.onEach { it ->
+                            val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
+                                chunk.entireFileCode,
+                                it.entireFunctionBody
+                            )
+                            entities.addAll(ent)
+                            relations.addAll(rln)
+                        }
+                        chunk.topLevelProperties.onEach {
+                            val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
+                                chunk.entireFileCode,
+                                it.entirePropertyBody
+                            )
+                            entities.addAll(ent)
+                            relations.addAll(rln)
+                        }
+                        chunk.classBreakdowns.onEach { clazz ->
+                            clazz.classMethods.onEach { meth ->
+                                val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
+                                    clazz.entireClassBody,
+                                    meth.entireMethodBody
+                                )
+                                entities.addAll(ent)
+                                relations.addAll(rln)
+                            }
+                            val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
+                                chunk.entireFileCode,
+                                clazz.entireClassBody
+                            )
+                            entities.addAll(ent)
+                            relations.addAll(rln)
+                        }
+                    }
+                }
                 // Upsert each entity and insert relations into the Neo4j graph
-                entities.forEach { GraphService.upsertEntity(it) }
-                relations.forEach { GraphService.insertRelation(it) }
+                entities.forEach {
+                    println("inserting entity = $it")
+                    GraphService.upsertEntity(it)
+                }
+                relations.forEach {
+                    println("inserting relation = $it")
+                    GraphService.insertRelation(it)
+                }
             } catch (ex: Exception) {
                 println("Error processing chunk: ${ex.message}")
+                ex.printStackTrace()
             }
         }
+    }.awaitAll()
+}
+
+
+fun main() = runBlocking {
+    try {
+        indexCodebase("/Users/chetan.gupta/Desktop/ch8n/rough/Agentik/src/main/kotlin/01-chat-models")
+
+        val all = GraphService.retrieveAllEntities()
+        println("""
+            all entities:
+            $all
+        """.trimIndent())
 
         // ---------- Phase 4: Query Processing & Dual-Level Retrieval ----------
-        val query = "What are the key components and interactions in the Android project codebase?"
+        val query = "What does AgentikModel class do?"
         val (localKeywords, globalKeywords) = QueryProcessor.extractQueryKeywords(query)
 
+        println(localKeywords)
+        println(globalKeywords)
         // Retrieve matching entities based on local keywords (entity-specific search)
         val lowLevelResults = mutableListOf<Entity>()
         for (keyword in localKeywords) {
             lowLevelResults.addAll(GraphService.retrieveEntitiesByKeyword(keyword))
         }
+
+        println(lowLevelResults)
         // Retrieve matching entities based on global keywords (thematic search)
         val highLevelResults = mutableListOf<Entity>()
         for (theme in globalKeywords) {
             highLevelResults.addAll(GraphService.retrieveEntitiesByTheme(theme))
         }
+
+        println(highLevelResults)
+
         // Combine and deduplicate results to form a comprehensive context
         val combinedEntities = (lowLevelResults + highLevelResults).distinctBy { it.name }
-        val context = combinedEntities.joinToString("\n") { "${it.name} (${it.type}): ${it.description}" }
+        val context = combinedEntities.joinToString("\n") { "${it.name} (${it.entType}): ${it.description}" }
 
         // ---------- Phase 5: Generate Final Answer ----------
         val answer = AnswerGenerator.generateAnswer(query, context)
         println("Final Answer:\n$answer")
 
-        // ---------- Advanced: Incremental Update Example ----------
-        // For demonstration, update index with a new file (adjust the path as needed)
-        val newFile = File("/path/to/your/android/project/app/src/main/java/com/example/NewFeature.kt")
-        if (newFile.exists()) {
-            IncrementalUpdater.updateIndexForNewFile(newFile)
-            println("Incremental update completed for file: ${newFile.absolutePath}")
-        } else {
-            println("New file for incremental update not found: ${newFile.absolutePath}")
-        }
+//        // ---------- Advanced: Incremental Update Example ----------
+//        // For demonstration, update index with a new file (adjust the path as needed)
+//        val newFile = File("/path/to/your/android/project/app/src/main/java/com/example/NewFeature.kt")
+//        if (newFile.exists()) {
+//            IncrementalUpdater.updateIndexForNewFile(newFile)
+//            println("Incremental update completed for file: ${newFile.absolutePath}")
+//        } else {
+//            println("New file for incremental update not found: ${newFile.absolutePath}")
+//        }
     } catch (e: Exception) {
         println("An error occurred in the LightRAG process: ${e.message}")
     } finally {

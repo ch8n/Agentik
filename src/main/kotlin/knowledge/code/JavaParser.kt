@@ -38,7 +38,7 @@ data class JavaMethodBreakDown(
 data class JavaFileBreakdown(
     val classBreakdowns: List<JavaClassBreakDown>,
     val entireFileCode: String
-)
+) : CodeBreakDown
 
 
 fun extractJavaFields(psiClass: PsiClass): List<JavaProperty> {
