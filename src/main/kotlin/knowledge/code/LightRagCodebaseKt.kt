@@ -51,7 +51,7 @@ private data class LLMResponse(val result: String)
 
 // ==================== Phase 1: Code Preprocessing using TreeSitter ====================
 
-val client = HttpClient(CIO) {
+private val client = HttpClient(CIO) {
     install(HttpTimeout) {
         requestTimeoutMillis = 60_000  // 30 seconds
         connectTimeoutMillis = 60_000  // Optional: 30s for establishing a connection
