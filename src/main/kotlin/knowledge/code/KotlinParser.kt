@@ -21,8 +21,18 @@ object CodeBreakDownSerializer :
     override fun selectDeserializer(
         element: JsonElement,
     ): DeserializationStrategy<out CodeBreakDown> {
-        val parsableLanguageString = element.jsonObject["parsableLanguage"]?.jsonPrimitive?.content
-        val parsableLanguage = ParsableLanguage.fromString(parsableLanguageString ?: "")
+        val parsableLanguageString = element.jsonObject["topLevelFunctions"]
+        var parsableLanguage = when{
+            parsableLanguageString != null -> ParsableLanguage.Kotlin
+            element.jsonObject.keys.isEmpty() -> ParsableLanguage.Unknown
+            else -> ParsableLanguage.Java
+        }
+        println("""
+            CodeBreakDownSerializer
+            body -> ${element.jsonObject.keys}
+            parsableLanguageString -> $parsableLanguageString
+            parsableLanguage -> $parsableLanguage
+        """.trimIndent())
         return when (parsableLanguage) {
             ParsableLanguage.Kotlin -> KotlinFileBreakdown.serializer()
             ParsableLanguage.Java -> JavaFileBreakdown.serializer()
@@ -133,7 +143,6 @@ fun extractTopLevelFunctions(ktFile: KtFile): List<TopLevelFunction> {
         )
     }
 }
-
 
 fun extractClassConstructorParameters(klass: KtClass): List<ConstructorParameter> {
     return klass.primaryConstructor?.valueParameters?.map { param ->

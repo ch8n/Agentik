@@ -74,7 +74,7 @@ class SqliteDB {
         }
     }
 
-    fun connectToSQLite(dbPath: String = "VectorV2.sqlite"): Connection {
+    fun connectToSQLite(dbPath: String = "./cache/VectorV2.sqlite"): Connection {
         val url = "jdbc:sqlite:$dbPath"
         return DriverManager.getConnection(url)
     }
@@ -110,7 +110,7 @@ class SqliteDB {
     """.trimIndent()
 
         connection.prepareStatement(insertSQL, PreparedStatement.RETURN_GENERATED_KEYS).use { pstmt ->
-            pstmt.setString(1, Json.encodeToString(embeddingEntity.codeBreakdown))
+            pstmt.setString(1, jsonClient.encodeToString(embeddingEntity.codeBreakdown))
             pstmt.setBytes(2, doubleArrayToByteArray(embeddingEntity.embedding))
             val affectedRows = pstmt.executeUpdate()
 
@@ -137,7 +137,7 @@ class SqliteDB {
             val rs = stmt.executeQuery(selectSQL)
             while (rs.next()) {
                 val id = rs.getLong("id")
-                val breakdown = Json.decodeFromString<CodeBreakDown>(rs.getString("breakdown"))
+                val breakdown = jsonClient.decodeFromString<CodeBreakDown>(rs.getString("breakdown"))
                 val embeddingBytes = rs.getBytes("embedding")
                 val embedding = byteArrayToDoubleArray(embeddingBytes)
                 embeddings.add(

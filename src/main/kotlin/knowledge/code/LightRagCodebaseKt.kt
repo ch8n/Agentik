@@ -10,7 +10,6 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
@@ -27,8 +26,7 @@ private data class Entity(
     val name: String,
     val entType: String,
     val description: String,
-    val source: String,
-    val codeBreakDown: CodeBreakDown
+    val source: String
 )
 
 @Serializable
@@ -52,7 +50,7 @@ private data class LLMResponse(val result: String)
 // ==================== Phase 1: Code Preprocessing using TreeSitter ====================
 const val OLLAMA_EMBEDDING = "nomic-embed-text:v1.5"
 const val OLLAMA_CHAT = "hermes3:3b-llama3.2-q8_0"
-private val jsonClient = Json {
+val jsonClient = Json {
     ignoreUnknownKeys = true
     prettyPrint = true
 }
@@ -198,7 +196,11 @@ private object EntityExtractor {
      * Extract entities and relationships from a code chunk using Ollama Qwen 2.5.
      * The prompt is tailored for code analysis (classes, functions, etc.).
      */
-    suspend fun extractEntitiesAndRelations(entireCode: String, codeChunk: String): Pair<List<Entity>, List<Relation>> {
+    suspend fun extractEntitiesAndRelations(
+        entireCode: String,
+        codeChunk: String,
+        chunk: KotlinFileBreakdown
+    ): Pair<List<Entity>, List<Relation>> {
         val prompt = """
             You are an expert code analyzer. You have the following code:
             $entireCode
@@ -344,7 +346,6 @@ private object GraphService {
                 e.entType = ${'$'}entType, 
                 e.description = ${'$'}description, 
                 e.source = ${'$'}source
-                e.breakdown = ${'$'}breakdown
             ON MATCH SET 
                 e.entType = ${'$'}entType, 
                 e.description = ${'$'}description, 
@@ -356,7 +357,6 @@ private object GraphService {
                 "entType" to entity.entType,
                 "description" to entity.description,
                 "source" to entity.source,
-                "breakdown" to jsonClient.encodeToString(entity.codeBreakDown)
             ).map { it.key to Value(it.value) }.toMap()
         )
     }
@@ -401,7 +401,6 @@ private object GraphService {
                         entType = value.getValue(1).toString(),
                         description = value.getValue(2).toString(),
                         source = value.getValue(3).toString(),
-                        codeBreakDown = jsonClient.decodeFromString(value.getValue(4).toString()),
                     )
                 )
             }
@@ -428,7 +427,6 @@ private object GraphService {
                         entType = value.getValue(1).toString(),
                         description = value.getValue(2).toString(),
                         source = value.getValue(3).toString(),
-                        codeBreakDown = jsonClient.decodeFromString(value.getValue(4).toString())
                     )
                 )
             }
@@ -439,7 +437,7 @@ private object GraphService {
         val result = conn.execute(
             """
         MATCH (e:Entity)
-        RETURN e.name as name, e.entType as entType, e.description as description, e.source as source, e.breakdown as breakdown 
+        RETURN e.name as name, e.entType as entType, e.description as description, e.source as source 
         """.trimIndent().prep(),
             emptyMap()
         )
@@ -453,7 +451,6 @@ private object GraphService {
                         entType = value.getValue(1).toString(),
                         description = value.getValue(2).toString(),
                         source = value.getValue(3).toString(),
-                        codeBreakDown = jsonClient.decodeFromString(value.getValue(3).toString()),
                     )
                 )
             }
@@ -637,7 +634,8 @@ fun indexCodebase(basePath: String) = try {
                             chunk.topLevelFunctions.onEach { it ->
                                 val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
                                     chunk.entireFileCode,
-                                    it.entireFunctionBody
+                                    it.entireFunctionBody,
+                                    chunk
                                 )
                                 entities.addAll(ent)
                                 relations.addAll(rln)
@@ -645,7 +643,8 @@ fun indexCodebase(basePath: String) = try {
                             chunk.topLevelProperties.onEach {
                                 val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
                                     chunk.entireFileCode,
-                                    it.entirePropertyBody
+                                    it.entirePropertyBody,
+                                    chunk
                                 )
                                 entities.addAll(ent)
                                 relations.addAll(rln)
@@ -654,14 +653,16 @@ fun indexCodebase(basePath: String) = try {
                                 clazz.classMethods.onEach { meth ->
                                     val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
                                         clazz.entireClassBody,
-                                        meth.entireMethodBody
+                                        meth.entireMethodBody,
+                                        chunk
                                     )
                                     entities.addAll(ent)
                                     relations.addAll(rln)
                                 }
                                 val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
                                     chunk.entireFileCode,
-                                    clazz.entireClassBody
+                                    clazz.entireClassBody,
+                                    chunk
                                 )
                                 entities.addAll(ent)
                                 relations.addAll(rln)
@@ -699,19 +700,9 @@ fun indexCodebase(basePath: String) = try {
 
 fun main() = runBlocking {
     try {
-        indexCodebase("/Users/chetan.gupta/Desktop/ch8n/rough/Agentik/src/main/kotlin/01-chat-models")
+        //indexCodebase("/Users/chetan.gupta/Desktop/ch8n/rough/Agentik/src/main/kotlin/01-chat-models")
 
         val allEntities = GraphService.retrieveAllEntities()
-        SqliteDB.withConnection { conn ->
-            val allEmbed = fetchAllEmbeddings(conn)
-            println(
-                """
-                all Sqlite Embed
-                $allEmbed
-            """.trimIndent()
-            )
-        }
-
         println(
             """
             all entities:
@@ -750,23 +741,36 @@ fun main() = runBlocking {
         """.trimIndent()
         )
 
-        val sementicResults = mutableListOf<EmbeddingEntitySQLite>()
+        SqliteDB.withConnection { conn ->
+            val allEmbed = fetchAllEmbeddings(conn)
+            println(
+                """
+                all Sqlite Embed
+                ${allEmbed.map { it.codeBreakdown }}
+            """.trimIndent()
+            )
+        }
+
+        val sementicResults = mutableListOf<CodeBreakDown>()
         SqliteDB.withConnection { conn ->
             runBlocking {
                 val embedding = EmbeddingService.getEmbedding(query)
                 val result = getTopNSimilarParallel(conn, embedding)
-                sementicResults.addAll(result)
+                sementicResults.addAll(result.map { it.codeBreakdown })
             }
         }
 
         // Combine and deduplicate results to form a comprehensive context
         val combinedEntities = (lowLevelResults + highLevelResults).distinctBy { it.name }
         val context = buildString {
-            append(combinedEntities.joinToString("\n") { "${it.name} (${it.entType}): ${it.description} ${it.codeBreakDown}" })
+            append(combinedEntities.joinToString("\n") { "${it.name} (${it.entType}): ${it.description}" })
             append(sementicResults)
         }
 
-
+        println("""
+            final context
+            $context
+        """.trimIndent())
         // ---------- Phase 5: Generate Final Answer ----------
         val answer = AnswerGenerator.generateAnswer(query, context)
         println("Final Answer:\n$answer")
