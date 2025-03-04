@@ -41,7 +41,6 @@ private data class Relation(
 )
 
 // For embedding response from Ollama Nomic
-@Serializable
 private data class EmbeddingResponse(val embedding: DoubleArray)
 
 // For LLM completions (used by both entity extraction and answer generation)
@@ -52,7 +51,10 @@ private data class LLMResponse(val result: String)
 // ==================== Phase 1: Code Preprocessing using TreeSitter ====================
 const val OLLAMA_EMBEDDING = "nomic-embed-text:v1.5"
 const val OLLAMA_CHAT = "hermes3:3b-llama3.2-q8_0"
-
+private val jsonClient = Json {
+    ignoreUnknownKeys = true
+    prettyPrint = true
+}
 private val client = HttpClient(CIO) {
     install(HttpTimeout) {
         requestTimeoutMillis = 60_000  // 30 seconds
@@ -60,10 +62,7 @@ private val client = HttpClient(CIO) {
         socketTimeoutMillis = 60_000   // Optional: 30s for data transfer
     }
     install(ContentNegotiation) {
-        json(Json {
-            ignoreUnknownKeys = true
-            prettyPrint = true
-        })
+        json(jsonClient)
     }
 }
 
@@ -168,11 +167,11 @@ private object EmbeddingService {
      */
     suspend fun getEmbedding(input: String): DoubleArray {
         try {
-            val body = Json.encodeToJsonElement(
+            val body = jsonClient.encodeToJsonElement(
                 mapOf(
                     "model" to OLLAMA_EMBEDDING,
                     "input" to input,
-                    "options" to Json.encodeToString(
+                    "options" to jsonClient.encodeToString(
                         mapOf(
                             "temperature" to "1"
                         )
@@ -184,7 +183,8 @@ private object EmbeddingService {
                 contentType(ContentType.Application.Json)
                 setBody(body)
             }
-            val embeddingResponse = Json.decodeFromString<EmbeddingResponse>(response.bodyAsText())
+            val embedding = SqliteDB.byteArrayToDoubleArray(response.bodyAsText().toByteArray())
+            val embeddingResponse = EmbeddingResponse(embedding)
             return embeddingResponse.embedding
         } catch (e: Exception) {
             println("Error getting embedding for text: ${e.message}")
@@ -286,7 +286,7 @@ private object EntityExtractor {
                 }
                 setBody(jsonRequest)
             }
-            val jsonObject = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+            val jsonObject = jsonClient.parseToJsonElement(response.bodyAsText()).jsonObject
             val responseText = jsonObject["response"]?.jsonPrimitive?.content ?: ""
             val llmResponse = LLMResponse(responseText)
             return parseExtractionResponse(llmResponse.result)
@@ -299,11 +299,11 @@ private object EntityExtractor {
     // Parse the JSON result into lists of Entity and Relation objects.
     private fun parseExtractionResponse(result: String): Pair<List<Entity>, List<Relation>> {
         return try {
-            val jsonElement = Json.parseToJsonElement(result)
+            val jsonElement = jsonClient.parseToJsonElement(result)
             val entitiesJson = jsonElement.jsonObject["entities"] ?: JsonArray(emptyList())
             val relationsJson = jsonElement.jsonObject["relations"] ?: JsonArray(emptyList())
-            val entities = Json.decodeFromJsonElement<List<Entity>>(entitiesJson)
-            val relations = Json.decodeFromJsonElement<List<Relation>>(relationsJson)
+            val entities = jsonClient.decodeFromJsonElement<List<Entity>>(entitiesJson)
+            val relations = jsonClient.decodeFromJsonElement<List<Relation>>(relationsJson)
             Pair(entities, relations)
         } catch (e: Exception) {
             println("Error parsing extraction response: ${e.message}")
@@ -357,7 +357,7 @@ private object GraphService {
                 "entType" to entity.entType,
                 "description" to entity.description,
                 "source" to entity.source,
-                "breakdown" to Json.encodeToString(entity.codeBreakDown)
+                "breakdown" to jsonClient.encodeToString(entity.codeBreakDown)
             ).map { it.key to Value(it.value) }.toMap()
         )
     }
@@ -402,7 +402,7 @@ private object GraphService {
                         entType = value.getValue(1).toString(),
                         description = value.getValue(2).toString(),
                         source = value.getValue(3).toString(),
-                        codeBreakDown = Json.decodeFromString(value.getValue(4).toString()),
+                        codeBreakDown = jsonClient.decodeFromString(value.getValue(4).toString()),
                     )
                 )
             }
@@ -429,7 +429,7 @@ private object GraphService {
                         entType = value.getValue(1).toString(),
                         description = value.getValue(2).toString(),
                         source = value.getValue(3).toString(),
-                        codeBreakDown = Json.decodeFromString(value.getValue(4).toString())
+                        codeBreakDown = jsonClient.decodeFromString(value.getValue(4).toString())
                     )
                 )
             }
@@ -454,7 +454,7 @@ private object GraphService {
                         entType = value.getValue(1).toString(),
                         description = value.getValue(2).toString(),
                         source = value.getValue(3).toString(),
-                        codeBreakDown = Json.decodeFromString(value.getValue(3).toString()),
+                        codeBreakDown = jsonClient.decodeFromString(value.getValue(3).toString()),
                     )
                 )
             }
@@ -515,7 +515,7 @@ private object QueryProcessor {
                 }
                 setBody(jsonRequest)
             }
-            val jsonObject = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+            val jsonObject = jsonClient.parseToJsonElement(response.bodyAsText()).jsonObject
             val responseText = jsonObject["response"]?.jsonPrimitive?.content ?: ""
             val llmResponse = LLMResponse(responseText)
             return parseKeywordResponse(llmResponse.result)
@@ -527,7 +527,7 @@ private object QueryProcessor {
 
     private fun parseKeywordResponse(result: String): Pair<List<String>, List<String>> {
         return try {
-            val jsonElement = Json.parseToJsonElement(result)
+            val jsonElement = jsonClient.parseToJsonElement(result)
             val local = jsonElement.jsonObject["local"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
             val global = jsonElement.jsonObject["global"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
             Pair(local, global)
@@ -564,7 +564,7 @@ object AnswerGenerator {
                     put("stream", false)
                 })
             }
-            val jsonObject = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+            val jsonObject = jsonClient.parseToJsonElement(response.bodyAsText()).jsonObject
             val responseText = jsonObject["response"]?.jsonPrimitive?.content ?: ""
             val llmResponse = LLMResponse(responseText)
             return llmResponse.result
@@ -586,7 +586,7 @@ private object IncrementalUpdater {
         val chunks = CodeParser.parseFile(file)
         for (chunk in chunks) {
             // Get embedding (if needed for future vector search)
-            val embedding = EmbeddingService.getEmbedding(Json.encodeToString(chunk))
+            val embedding = EmbeddingService.getEmbedding(jsonClient.encodeToString(chunk))
             // Extract entities and relations using the advanced LLM extraction
             val (entities, relations) = Pair(listOf<Entity>(), listOf<Relation>())
             //EntityExtractor.extractEntitiesAndRelations(chunk)
@@ -618,11 +618,17 @@ fun indexCodebase(basePath: String) = runBlocking {
     println(codeChunks)
 
     // ---------- Phase 2 & 3: Process Each Code Chunk, Extract Entities & Build Graph ----------
-    codeChunks.map { chunk ->
+    codeChunks.map { chunk: CodeBreakDown ->
         async(Dispatchers.IO) {
             try {
                 // Get embedding for the chunk using Ollama Nomic
-                val embedding = EmbeddingService.getEmbedding(Json.encodeToString(chunk))
+                val embedding = EmbeddingService.getEmbedding(
+                    when(chunk){
+                        is JavaFileBreakdown -> chunk.entireFileCode
+                        is KotlinFileBreakdown -> chunk.entireFileCode
+                        NoCodeBreakdown -> ""
+                    }
+                )
                 // Extract entities and relations from the code chunk using Qwen 2.5
                 val entities = mutableListOf<Entity>()
                 val relations = mutableListOf<Relation>()
