@@ -16,7 +16,6 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.*
 import kotlinx.serialization.json.*
-import org.neo4j.driver.*
 import java.io.File
 import java.util.regex.Pattern
 
@@ -28,7 +27,8 @@ private data class Entity(
     val name: String,
     val entType: String,
     val description: String,
-    val source: String
+    val source: String,
+    val codeBreakDown: CodeBreakDown
 )
 
 @Serializable
@@ -42,7 +42,7 @@ private data class Relation(
 
 // For embedding response from Ollama Nomic
 @Serializable
-private data class EmbeddingResponse(val embedding: List<Float>)
+private data class EmbeddingResponse(val embedding: DoubleArray)
 
 // For LLM completions (used by both entity extraction and answer generation)
 @Serializable
@@ -166,12 +166,12 @@ private object EmbeddingService {
      * Get the embedding for the given text using Ollama Nomic model.
      * Uses endpoint "http://localhost:11434/v1/embed" with model "nomic-embed-text".
      */
-    suspend fun getEmbedding(code: CodeBreakDown): List<Float> {
+    suspend fun getEmbedding(input: String): DoubleArray {
         try {
             val body = Json.encodeToJsonElement(
                 mapOf(
                     "model" to OLLAMA_EMBEDDING,
-                    "input" to code,
+                    "input" to input,
                     "options" to Json.encodeToString(
                         mapOf(
                             "temperature" to "1"
@@ -345,6 +345,7 @@ private object GraphService {
                 e.entType = ${'$'}entType, 
                 e.description = ${'$'}description, 
                 e.source = ${'$'}source
+                e.breakdown = ${'$'}breakdown
             ON MATCH SET 
                 e.entType = ${'$'}entType, 
                 e.description = ${'$'}description, 
@@ -355,7 +356,8 @@ private object GraphService {
                 "name" to entity.name,
                 "entType" to entity.entType,
                 "description" to entity.description,
-                "source" to entity.source
+                "source" to entity.source,
+                "breakdown" to Json.encodeToString(entity.codeBreakDown)
             ).map { it.key to Value(it.value) }.toMap()
         )
     }
@@ -375,7 +377,7 @@ private object GraphService {
                 "targetName" to relation.targetEntity,
                 "relationType" to relation.relationType,
                 "description" to relation.description,
-                "source" to relation.source
+                "source" to relation.source,
             ).map { it.key to Value(it.value) }.toMap()
         )
     }
@@ -400,6 +402,7 @@ private object GraphService {
                         entType = value.getValue(1).toString(),
                         description = value.getValue(2).toString(),
                         source = value.getValue(3).toString(),
+                        codeBreakDown = Json.decodeFromString(value.getValue(4).toString()),
                     )
                 )
             }
@@ -426,6 +429,7 @@ private object GraphService {
                         entType = value.getValue(1).toString(),
                         description = value.getValue(2).toString(),
                         source = value.getValue(3).toString(),
+                        codeBreakDown = Json.decodeFromString(value.getValue(4).toString())
                     )
                 )
             }
@@ -436,7 +440,7 @@ private object GraphService {
         val result = conn.execute(
             """
         MATCH (e:Entity)
-        RETURN e.name as name, e.entType as entType, e.description as description, e.source as source
+        RETURN e.name as name, e.entType as entType, e.description as description, e.source as source, e.breakdown as breakdown 
         """.trimIndent().prep(),
             emptyMap()
         )
@@ -450,6 +454,7 @@ private object GraphService {
                         entType = value.getValue(1).toString(),
                         description = value.getValue(2).toString(),
                         source = value.getValue(3).toString(),
+                        codeBreakDown = Json.decodeFromString(value.getValue(3).toString()),
                     )
                 )
             }
@@ -581,7 +586,7 @@ private object IncrementalUpdater {
         val chunks = CodeParser.parseFile(file)
         for (chunk in chunks) {
             // Get embedding (if needed for future vector search)
-            val embedding = EmbeddingService.getEmbedding(chunk)
+            val embedding = EmbeddingService.getEmbedding(Json.encodeToString(chunk))
             // Extract entities and relations using the advanced LLM extraction
             val (entities, relations) = Pair(listOf<Entity>(), listOf<Relation>())
             //EntityExtractor.extractEntitiesAndRelations(chunk)
@@ -598,7 +603,9 @@ private object IncrementalUpdater {
 fun indexCodebase(basePath: String) = runBlocking {
     // ---------- Phase 1: Code Ingestion & Preprocessing ----------
     // Assume the Android project root is provided (adjust the path as needed)
-
+    val sqlite = SqliteDB()
+    val connection = sqlite.connectToSQLite()
+    sqlite.createEmbeddingsTable(connection)
     val codeRootPath = File(basePath).absolutePath
     println(codeRootPath)
     val codeChunks = CodeParser.parseCodebase(codeRootPath)
@@ -615,7 +622,7 @@ fun indexCodebase(basePath: String) = runBlocking {
         async(Dispatchers.IO) {
             try {
                 // Get embedding for the chunk using Ollama Nomic
-                //val embedding = EmbeddingService.getEmbedding(chunk)
+                val embedding = EmbeddingService.getEmbedding(Json.encodeToString(chunk))
                 // Extract entities and relations from the code chunk using Qwen 2.5
                 val entities = mutableListOf<Entity>()
                 val relations = mutableListOf<Relation>()
@@ -664,12 +671,20 @@ fun indexCodebase(basePath: String) = runBlocking {
                     println("inserting relation = $it")
                     GraphService.insertRelation(it)
                 }
+                sqlite.insertCodeBreakdown(
+                    connection, EmbeddingEntitySQLite(
+                        codeBreakdown = chunk,
+                        embedding = embedding
+                    )
+                )
             } catch (ex: Exception) {
                 println("Error processing chunk: ${ex.message}")
                 ex.printStackTrace()
             }
         }
     }.awaitAll()
+
+    connection.close()
 }
 
 
@@ -677,12 +692,21 @@ fun main() = runBlocking {
     try {
         indexCodebase("/Users/chetan.gupta/Desktop/ch8n/rough/Agentik/src/main/kotlin/01-chat-models")
 
-        val all = GraphService.retrieveAllEntities()
+        val allEntities = GraphService.retrieveAllEntities()
+        SqliteDB.withConnection { conn ->
+            val allEmbed = fetchAllEmbeddings(conn)
+            println(
+                """
+                all Sqlite Embed
+                $allEmbed
+            """.trimIndent()
+            )
+        }
 
         println(
             """
             all entities:
-            $all
+            $allEntities
         """.trimIndent()
         )
 
@@ -717,9 +741,22 @@ fun main() = runBlocking {
         """.trimIndent()
         )
 
+        val sementicResults = mutableListOf<EmbeddingEntitySQLite>()
+        SqliteDB.withConnection { conn ->
+            runBlocking {
+                val embedding = EmbeddingService.getEmbedding(query)
+                val result = getTopNSimilarParallel(conn, embedding)
+                sementicResults.addAll(result)
+            }
+        }
+
         // Combine and deduplicate results to form a comprehensive context
         val combinedEntities = (lowLevelResults + highLevelResults).distinctBy { it.name }
-        val context = combinedEntities.joinToString("\n") { "${it.name} (${it.entType}): ${it.description}" }
+        val context = buildString {
+            append(combinedEntities.joinToString("\n") { "${it.name} (${it.entType}): ${it.description} ${it.codeBreakDown}" })
+            append(sementicResults)
+        }
+
 
         // ---------- Phase 5: Generate Final Answer ----------
         val answer = AnswerGenerator.generateAnswer(query, context)

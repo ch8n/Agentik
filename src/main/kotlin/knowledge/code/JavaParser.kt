@@ -1,5 +1,6 @@
 package knowledge.code
 
+import kotlinx.serialization.Serializable
 import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
 import org.jetbrains.kotlin.com.intellij.lang.java.JavaLanguage
@@ -10,6 +11,21 @@ import org.jetbrains.kotlin.com.intellij.psi.PsiJavaFile
 import org.jetbrains.kotlin.com.intellij.psi.PsiModifier
 import org.jetbrains.kotlin.config.CompilerConfiguration
 
+
+
+enum class ParsableLanguage {
+    Kotlin,
+    Java,
+    Unknown;
+    companion object {
+        fun fromString(value: String): ParsableLanguage {
+            return runCatching { ParsableLanguage.valueOf(value) }
+                .getOrDefault(Unknown)
+        }
+    }
+}
+
+@Serializable
 data class JavaClassBreakDown(
     val className: String,
     val classFields: List<JavaProperty>,
@@ -18,6 +34,7 @@ data class JavaClassBreakDown(
     val classType: String // e.g., Object, Abstract, Interface, Enum
 )
 
+@Serializable
 data class JavaProperty(
     val visibility: String,
     val valOrVar: String,  // "final", "static" or ""
@@ -25,6 +42,7 @@ data class JavaProperty(
     val propertyType: String
 )
 
+@Serializable
 data class JavaMethodBreakDown(
     val methodName: String,
     val returnType: String,
@@ -35,9 +53,11 @@ data class JavaMethodBreakDown(
     val entireMethodBody: String
 )
 
+@Serializable
 data class JavaFileBreakdown(
     val classBreakdowns: List<JavaClassBreakDown>,
-    val entireFileCode: String
+    val entireFileCode: String,
+    override val parsableLanguage: String = "Java"
 ) : CodeBreakDown
 
 

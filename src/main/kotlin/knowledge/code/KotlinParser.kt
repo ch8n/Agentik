@@ -1,5 +1,6 @@
 package knowledge.code
 
+import kotlinx.serialization.DeserializationStrategy
 import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
 import org.jetbrains.kotlin.com.intellij.openapi.Disposable
@@ -8,13 +9,41 @@ import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.idea.KotlinLanguage
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonContentPolymorphicSerializer
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 
-interface CodeBreakDown
+object CodeBreakDownSerializer :
+    JsonContentPolymorphicSerializer<CodeBreakDown>(CodeBreakDown::class) {
+    override fun selectDeserializer(
+        element: JsonElement,
+    ): DeserializationStrategy<out CodeBreakDown> {
+        val parsableLanguageString = element.jsonObject["parsableLanguage"]?.jsonPrimitive?.content
+        val parsableLanguage = ParsableLanguage.fromString(parsableLanguageString ?: "")
+        return when (parsableLanguage) {
+            ParsableLanguage.Kotlin -> KotlinFileBreakdown.serializer()
+            ParsableLanguage.Java -> JavaFileBreakdown.serializer()
+            ParsableLanguage.Unknown -> NoCodeBreakdown.serializer()
+        }
+    }
+}
 
-object NoCodeBreakdown: CodeBreakDown
+@Serializable(with = CodeBreakDownSerializer::class)
+interface CodeBreakDown {
+    val parsableLanguage: String
+}
+
+@Serializable
+object NoCodeBreakdown : CodeBreakDown {
+    override val parsableLanguage: String
+        get() = "unknown"
+}
 
 // Data classes to hold breakdown information
+@Serializable
 data class ClassBreakDown(
     val className: String,
     val classProperties: ArrayList<ClassProperty>,
@@ -24,6 +53,7 @@ data class ClassBreakDown(
     val entireClassBody: String,
 )
 
+@Serializable
 data class ClassProperty(
     val valOrVar: String,
     val propertyName: String,
@@ -31,6 +61,7 @@ data class ClassProperty(
     val entirePropertyBody: String
 )
 
+@Serializable
 data class ClassMethodBreakDown(
     val methodName: String,
     val returnType: String,
@@ -38,6 +69,7 @@ data class ClassMethodBreakDown(
     val entireMethodBody: String
 )
 
+@Serializable
 data class ConstructorParameter(
     val parameterName: String,
     val parameterType: String,
@@ -45,6 +77,7 @@ data class ConstructorParameter(
     val visibility: String
 )
 
+@Serializable
 data class TopLevelFunction(
     val functionName: String,
     val returnType: String,
@@ -52,6 +85,7 @@ data class TopLevelFunction(
     val entireFunctionBody: String
 )
 
+@Serializable
 data class TopLevelProperty(
     val propertyName: String,
     val propertyType: String,
@@ -60,11 +94,13 @@ data class TopLevelProperty(
     val entirePropertyBody: String
 )
 
+@Serializable
 data class KotlinFileBreakdown(
     val topLevelFunctions: List<TopLevelFunction>,
     val topLevelProperties: List<TopLevelProperty>,
     val classBreakdowns: List<ClassBreakDown>,
-    val entireFileCode: String
+    val entireFileCode: String,
+    override val parsableLanguage: String = "Kotlin"
 ) : CodeBreakDown
 
 
@@ -179,7 +215,8 @@ fun extractClassMethods(klass: KtClass): ArrayList<ClassMethodBreakDown> {
 // Function to parse Kotlin source code
 fun parseKotlinCode(sourceCode: String): KotlinFileBreakdown {
     val configuration = CompilerConfiguration()
-    val kotlinEnv = KotlinCoreEnvironment.createForProduction(Disposable {}, configuration, EnvironmentConfigFiles.JVM_CONFIG_FILES)
+    val kotlinEnv =
+        KotlinCoreEnvironment.createForProduction(Disposable {}, configuration, EnvironmentConfigFiles.JVM_CONFIG_FILES)
     val psiFactory = PsiFileFactory.getInstance(kotlinEnv.project)
     val ktFile = psiFactory.createFileFromText("temp.kt", KotlinLanguage.INSTANCE, sourceCode) as KtFile
 
