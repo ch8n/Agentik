@@ -75,6 +75,7 @@ suspend fun voiceOverWorkflow(
 
 
 fun main() = runBlocking {
+    // docker run -p 8880:8880 ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.2
     voiceOverWorkflow(
         videoUrl = "https://www.youtube.com/watch?v=CUmGaesHng0&ab_channel=Anim3Senpai",
         outputFileName = "Top 10 Anime Where MC is Overpowered but Pretends to be Weak"

@@ -50,6 +50,8 @@ private data class LLMResponse(val result: String)
 
 
 // ==================== Phase 1: Code Preprocessing using TreeSitter ====================
+const val OLLAMA_EMBEDDING = "nomic-embed-text:v1.5"
+const val OLLAMA_CHAT = "hermes3:3b-llama3.2-q8_0"
 
 private val client = HttpClient(CIO) {
     install(HttpTimeout) {
@@ -168,7 +170,7 @@ private object EmbeddingService {
         try {
             val body = Json.encodeToJsonElement(
                 mapOf(
-                    "model" to "nomic-embed-text:latest",
+                    "model" to OLLAMA_EMBEDDING,
                     "input" to code,
                     "options" to Json.encodeToString(
                         mapOf(
@@ -215,7 +217,7 @@ private object EntityExtractor {
 
                 val jsonRequest = buildJsonObject {
                     put("prompt", prompt)
-                    put("model", "hermes3:3b")
+                    put("model", OLLAMA_CHAT)
                     put("stream", false)
 
                     put("format", buildJsonObject {
@@ -312,110 +314,8 @@ private object EntityExtractor {
 
 // ==================== Phase 3: Graph Construction & Deduplication (Neo4j) ====================
 
-private object GraphServiceBackup {
-    // Connect to local Neo4j database – adjust credentials as necessary.
-    private val driver: Driver = GraphDatabase.driver("bolt://localhost:7687", AuthTokens.basic("neo4j", "password"))
-
-    fun close() {
-        driver.close()
-    }
-
-    // Upsert an entity (by name) into Neo4j.
-    fun upsertEntity(entity: Entity) {
-        driver.session().use { session ->
-            session.writeTransaction { tx ->
-                tx.run(
-                    """
-                    MERGE (e:Entity {name: ${'$'}name})
-                    ON CREATE SET e.type = ${'$'}entType, e.description = ${'$'}description, e.source = ${'$'}source
-                    ON MATCH SET e.type = ${'$'}entType, e.description = ${'$'}description, e.source = ${'$'}source
-                    """.trimIndent(),
-                    mapOf(
-                        "name" to entity.name,
-                        "entType" to entity.entType,
-                        "description" to entity.description,
-                        "source" to entity.source
-                    )
-                )
-                null
-            }
-        }
-    }
-
-    // Insert a relation between two entities. Assumes both entities exist.
-    fun insertRelation(relation: Relation) {
-        driver.session().use { session ->
-            session.writeTransaction { tx ->
-                tx.run(
-                    """
-                    MATCH (a:Entity {name: ${'$'}sourceName}), (b:Entity {name: ${'$'}targetName})
-                    MERGE (a)-[r:RELATION {type: ${'$'}relationType}]->(b)
-                    ON CREATE SET r.description = ${'$'}description, r.source = ${'$'}source
-                    ON MATCH SET r.description = ${'$'}description, r.source = ${'$'}source
-                    """.trimIndent(),
-                    mapOf(
-                        "sourceName" to relation.sourceEntity,
-                        "targetName" to relation.targetEntity,
-                        "relationType" to relation.relationType,
-                        "description" to relation.description,
-                        "source" to relation.source
-                    )
-                )
-                null
-            }
-        }
-    }
-
-    // Retrieve entities using a low-level keyword search (by name).
-    fun retrieveEntitiesByKeyword(keyword: String): List<Entity> {
-        return driver.session().use { session ->
-            session.readTransaction { tx ->
-                val result = tx.run(
-                    """
-                    MATCH (e:Entity)
-                    WHERE toLower(e.name) CONTAINS toLower(${'$'}keyword)
-                    RETURN e.name as name, e.type as type, e.description as description, e.source as source
-                    """.trimIndent(), mapOf("keyword" to keyword)
-                )
-                result.list { record ->
-                    Entity(
-                        name = record["name"].asString(),
-                        entType = record["entType"].asString(),
-                        description = record["description"].asString(),
-                        source = record["source"].asString()
-                    )
-                }
-            }
-        }
-    }
-
-    // Retrieve entities by theme (searching within descriptions).
-    fun retrieveEntitiesByTheme(theme: String): List<Entity> {
-        return driver.session().use { session ->
-            session.readTransaction { tx ->
-                val result = tx.run(
-                    """
-                    MATCH (e:Entity)
-                    WHERE toLower(e.description) CONTAINS toLower(${'$'}theme)
-                    RETURN e.name as name, e.type as type, e.description as description, e.source as source
-                    """.trimIndent(), mapOf("theme" to theme)
-                )
-                result.list { record ->
-                    Entity(
-                        name = record["name"].asString(),
-                        entType = record["entType"].asString(),
-                        description = record["description"].asString(),
-                        source = record["source"].asString()
-                    )
-                }
-            }
-        }
-    }
-}
-
 private object GraphService {
-    // Create an in-memory database
-    private val db = Database("./graph_db")
+    private val db = Database("./cache/graph_db")
     private val conn = Connection(db)
 
     fun String.prep(): PreparedStatement = conn.prepare(this)
@@ -580,7 +480,7 @@ private object QueryProcessor {
                 contentType(ContentType.Application.Json)
                 val jsonRequest = buildJsonObject {
                     put("prompt", prompt)
-                    put("model", "hermes3:3b")
+                    put("model", OLLAMA_CHAT)
                     put("stream", false)
                     put(
                         "format",
@@ -655,7 +555,7 @@ object AnswerGenerator {
                 contentType(ContentType.Application.Json)
                 setBody(buildJsonObject {
                     put("prompt", prompt)
-                    put("model", "hermes3:3b")
+                    put("model", OLLAMA_CHAT)
                     put("stream", false)
                 })
             }
@@ -778,10 +678,13 @@ fun main() = runBlocking {
         indexCodebase("/Users/chetan.gupta/Desktop/ch8n/rough/Agentik/src/main/kotlin/01-chat-models")
 
         val all = GraphService.retrieveAllEntities()
-        println("""
+
+        println(
+            """
             all entities:
             $all
-        """.trimIndent())
+        """.trimIndent()
+        )
 
         // ---------- Phase 4: Query Processing & Dual-Level Retrieval ----------
         val query = "What does AgentikModel class do?"
@@ -795,14 +698,24 @@ fun main() = runBlocking {
             lowLevelResults.addAll(GraphService.retrieveEntitiesByKeyword(keyword))
         }
 
-        println(lowLevelResults)
+        println(
+            """
+            lowLevelResults
+            $lowLevelResults
+        """.trimIndent()
+        )
         // Retrieve matching entities based on global keywords (thematic search)
         val highLevelResults = mutableListOf<Entity>()
         for (theme in globalKeywords) {
             highLevelResults.addAll(GraphService.retrieveEntitiesByTheme(theme))
         }
 
-        println(highLevelResults)
+        println(
+            """
+            highLevelResults
+            $highLevelResults
+        """.trimIndent()
+        )
 
         // Combine and deduplicate results to form a comprehensive context
         val combinedEntities = (lowLevelResults + highLevelResults).distinctBy { it.name }
