@@ -41,7 +41,8 @@ private data class Relation(
 )
 
 // For embedding response from Ollama Nomic
-private data class EmbeddingResponse(val embedding: DoubleArray)
+@Serializable
+private data class EmbeddingResponse(val embeddings: List<Double>)
 
 // For LLM completions (used by both entity extraction and answer generation)
 @Serializable
@@ -167,25 +168,23 @@ private object EmbeddingService {
      */
     suspend fun getEmbedding(input: String): DoubleArray {
         try {
-            val body = jsonClient.encodeToJsonElement(
-                mapOf(
-                    "model" to OLLAMA_EMBEDDING,
-                    "input" to input,
-                    "options" to jsonClient.encodeToString(
-                        mapOf(
-                            "temperature" to "1"
-                        )
-                    ),
-                    "stream" to "false"
-                )
-            )
+            println(input)
+            val body = buildJsonObject {
+                put("model", OLLAMA_EMBEDDING)
+                put("input", input)
+                put("stream", "false")
+                put("options", buildJsonObject {
+                    put("temperature", 1f)
+                })
+            }
             val response = client.post("http://localhost:11434/api/embed") {
                 contentType(ContentType.Application.Json)
                 setBody(body)
             }
-            val embedding = SqliteDB.byteArrayToDoubleArray(response.bodyAsText().toByteArray())
-            val embeddingResponse = EmbeddingResponse(embedding)
-            return embeddingResponse.embedding
+            val responseJson = jsonClient.parseToJsonElement(response.bodyAsText())
+            val embeddingString = responseJson.jsonObject["embeddings"].toString()
+            val doubled = jsonClient.decodeFromString<List<List<Double>>>(embeddingString)
+            return doubled.first().toDoubleArray()
         } catch (e: Exception) {
             println("Error getting embedding for text: ${e.message}")
             throw e
@@ -583,7 +582,7 @@ private object IncrementalUpdater {
      * Uses the CodeParser to extract chunks from the new file, then processes each chunk.
      */
     suspend fun updateIndexForNewFile(file: File) {
-        val chunks = CodeParser.parseFile(file)
+        val chunks: List<CodeBreakDown> = CodeParser.parseFile(file)
         for (chunk in chunks) {
             // Get embedding (if needed for future vector search)
             val embedding = EmbeddingService.getEmbedding(jsonClient.encodeToString(chunk))
@@ -600,99 +599,103 @@ private object IncrementalUpdater {
 // ==================== Main Flow: Tying It All Together ====================
 
 
-fun indexCodebase(basePath: String) = runBlocking {
-    // ---------- Phase 1: Code Ingestion & Preprocessing ----------
-    // Assume the Android project root is provided (adjust the path as needed)
-    val sqlite = SqliteDB()
-    val connection = sqlite.connectToSQLite()
-    sqlite.createEmbeddingsTable(connection)
-    val codeRootPath = File(basePath).absolutePath
-    println(codeRootPath)
-    val codeChunks = CodeParser.parseCodebase(codeRootPath)
+fun indexCodebase(basePath: String) = try {
+    runBlocking {
+        // ---------- Phase 1: Code Ingestion & Preprocessing ----------
+        // Assume the Android project root is provided (adjust the path as needed)
+        val sqlite = SqliteDB()
+        val connection = sqlite.connectToSQLite()
+        sqlite.createEmbeddingsTable(connection)
+        val codeRootPath = File(basePath).absolutePath
+        println(codeRootPath)
+        val codeChunks = CodeParser.parseCodebase(codeRootPath)
 
-    if (codeChunks.isEmpty()) {
-        println("No code chunks extracted from the project.")
-        return@runBlocking
-    }
+        if (codeChunks.isEmpty()) {
+            println("No code chunks extracted from the project.")
+            return@runBlocking
+        }
 
-    println(codeChunks)
+        println(codeChunks)
 
-    // ---------- Phase 2 & 3: Process Each Code Chunk, Extract Entities & Build Graph ----------
-    codeChunks.map { chunk: CodeBreakDown ->
-        async(Dispatchers.IO) {
-            try {
-                // Get embedding for the chunk using Ollama Nomic
-                val embedding = EmbeddingService.getEmbedding(
-                    when(chunk){
-                        is JavaFileBreakdown -> chunk.entireFileCode
-                        is KotlinFileBreakdown -> chunk.entireFileCode
-                        NoCodeBreakdown -> ""
-                    }
-                )
-                // Extract entities and relations from the code chunk using Qwen 2.5
-                val entities = mutableListOf<Entity>()
-                val relations = mutableListOf<Relation>()
-                when {
-                    chunk is KotlinFileBreakdown -> {
-                        chunk.topLevelFunctions.onEach { it ->
-                            val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
-                                chunk.entireFileCode,
-                                it.entireFunctionBody
-                            )
-                            entities.addAll(ent)
-                            relations.addAll(rln)
+        // ---------- Phase 2 & 3: Process Each Code Chunk, Extract Entities & Build Graph ----------
+        codeChunks.map { chunk: CodeBreakDown ->
+            async {
+                try {
+                    // Get embedding for the chunk using Ollama Nomic
+                    val embedding = EmbeddingService.getEmbedding(
+                        when (chunk) {
+                            is JavaFileBreakdown -> chunk.entireFileCode
+                            is KotlinFileBreakdown -> chunk.entireFileCode
+                            else -> ""
                         }
-                        chunk.topLevelProperties.onEach {
-                            val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
-                                chunk.entireFileCode,
-                                it.entirePropertyBody
-                            )
-                            entities.addAll(ent)
-                            relations.addAll(rln)
-                        }
-                        chunk.classBreakdowns.onEach { clazz ->
-                            clazz.classMethods.onEach { meth ->
+                    )
+                    // Extract entities and relations from the code chunk using Qwen 2.5
+                    val entities = mutableListOf<Entity>()
+                    val relations = mutableListOf<Relation>()
+                    when {
+                        chunk is KotlinFileBreakdown -> {
+                            chunk.topLevelFunctions.onEach { it ->
                                 val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
-                                    clazz.entireClassBody,
-                                    meth.entireMethodBody
+                                    chunk.entireFileCode,
+                                    it.entireFunctionBody
                                 )
                                 entities.addAll(ent)
                                 relations.addAll(rln)
                             }
-                            val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
-                                chunk.entireFileCode,
-                                clazz.entireClassBody
-                            )
-                            entities.addAll(ent)
-                            relations.addAll(rln)
+                            chunk.topLevelProperties.onEach {
+                                val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
+                                    chunk.entireFileCode,
+                                    it.entirePropertyBody
+                                )
+                                entities.addAll(ent)
+                                relations.addAll(rln)
+                            }
+                            chunk.classBreakdowns.onEach { clazz ->
+                                clazz.classMethods.onEach { meth ->
+                                    val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
+                                        clazz.entireClassBody,
+                                        meth.entireMethodBody
+                                    )
+                                    entities.addAll(ent)
+                                    relations.addAll(rln)
+                                }
+                                val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
+                                    chunk.entireFileCode,
+                                    clazz.entireClassBody
+                                )
+                                entities.addAll(ent)
+                                relations.addAll(rln)
+                            }
                         }
                     }
-                }
-                // Upsert each entity and insert relations into the Neo4j graph
-                entities.forEach {
-                    println("inserting entity = $it")
-                    GraphService.upsertEntity(it)
-                }
-                relations.forEach {
-                    println("inserting relation = $it")
-                    GraphService.insertRelation(it)
-                }
-                sqlite.insertCodeBreakdown(
-                    connection, EmbeddingEntitySQLite(
-                        codeBreakdown = chunk,
-                        embedding = embedding
+                    // Upsert each entity and insert relations into the Neo4j graph
+                    entities.forEach {
+                        println("inserting entity = $it")
+                        GraphService.upsertEntity(it)
+                    }
+                    relations.forEach {
+                        println("inserting relation = $it")
+                        GraphService.insertRelation(it)
+                    }
+                    sqlite.insertCodeBreakdown(
+                        connection, EmbeddingEntitySQLite(
+                            codeBreakdown = chunk,
+                            embedding = embedding
+                        )
                     )
-                )
-            } catch (ex: Exception) {
-                println("Error processing chunk: ${ex.message}")
-                ex.printStackTrace()
+                } catch (ex: Exception) {
+                    println("Error processing chunk: ${ex.message}")
+                    ex.printStackTrace()
+                }
             }
-        }
-    }.awaitAll()
+        }.awaitAll()
 
-    connection.close()
+        connection.close()
+    }
+
+} catch (e: Exception) {
+    e.printStackTrace()
 }
-
 
 fun main() = runBlocking {
     try {

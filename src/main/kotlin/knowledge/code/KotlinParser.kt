@@ -32,7 +32,7 @@ object CodeBreakDownSerializer :
 }
 
 @Serializable(with = CodeBreakDownSerializer::class)
-sealed interface CodeBreakDown {
+interface CodeBreakDown {
     val parsableLanguage: String
 }
 
