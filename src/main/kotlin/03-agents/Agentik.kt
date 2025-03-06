@@ -8,11 +8,19 @@ import dev.langchain4j.data.message.SystemMessage
 import dev.langchain4j.data.message.ToolExecutionResultMessage
 import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.service.AiServices
+import dev.langchain4j.service.TokenStream
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import memory.sessions.SessionStorage
 
 
 private interface AiAssistant {
     fun chat(prompt: String): String
+    fun chatStreaming(userPrompt: String): TokenStream
 }
 
 data class Agentik(
@@ -57,6 +65,17 @@ data class Agentik(
             assistant.chat(userPrompt)
         } catch (e: Exception) {
             e.message ?: "Failed to response"
+        }
+    }
+
+    fun executeStreaming(userPrompt: String): Flow<String> {
+        return callbackFlow {
+            assistant.chatStreaming(userPrompt)
+                .onNext { token -> trySend(token) }
+                .onError { _error -> close(_error) }
+                .onComplete { close() }
+                .start()
+            awaitClose {}
         }
     }
 }

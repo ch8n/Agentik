@@ -30,8 +30,6 @@ fun App() {
         Column(
             modifier = Modifier.padding(40.dp)
         ) {
-
-
             val agentik = remember {
                 Agentik(
                     chatModel = OllamaAgentikModel,

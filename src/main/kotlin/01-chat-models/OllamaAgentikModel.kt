@@ -9,7 +9,7 @@ import dev.langchain4j.model.ollama.OllamaStreamingLanguageModel
 
 object OllamaDefaults {
     const val BASE_URL = "http://localhost:11434"
-    const val DEFAULT_MODEL = "hermes3:3b"
+    const val DEFAULT_MODEL = "deepscaler:latest"
 }
 
 object OllamaAgentikModel : AgentikModel {
