@@ -20,6 +20,7 @@ import `02-functions`.maths.MathsKtx
 import `02-functions`.websearch.WebSearchKtx
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import workflows.AnimeExplainedApp
 
 @Composable
 @Preview
@@ -131,6 +132,7 @@ fun App() {
 
 fun main() = application {
     Window(onCloseRequest = ::exitApplication) {
-        App()
+        //App()
+        AnimeExplainedApp()
     }
 }

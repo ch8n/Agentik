@@ -54,11 +54,11 @@ val jsonClient = Json {
     ignoreUnknownKeys = true
     prettyPrint = true
 }
-private val client = HttpClient(CIO) {
+val httpClient = HttpClient(CIO) {
     install(HttpTimeout) {
-        requestTimeoutMillis = 60_000  // 30 seconds
-        connectTimeoutMillis = 60_000  // Optional: 30s for establishing a connection
-        socketTimeoutMillis = 60_000   // Optional: 30s for data transfer
+        requestTimeoutMillis = 120_000  // 30 seconds
+        connectTimeoutMillis = 120_000  // Optional: 30s for establishing a connection
+        socketTimeoutMillis = 120_000   // Optional: 30s for data transfer
     }
     install(ContentNegotiation) {
         json(jsonClient)
@@ -175,7 +175,7 @@ private object EmbeddingService {
                     put("temperature", 1f)
                 })
             }
-            val response = client.post("http://localhost:11434/api/embed") {
+            val response = httpClient.post("http://localhost:11434/api/embed") {
                 contentType(ContentType.Application.Json)
                 setBody(body)
             }
@@ -212,7 +212,7 @@ private object EntityExtractor {
             $codeChunk
         """.trimIndent()
         try {
-            val response = client.post("http://localhost:11434/api/generate") {
+            val response = httpClient.post("http://localhost:11434/api/generate") {
                 contentType(ContentType.Application.Json)
                 // Use the Ollama Qwen 2.5 model for advanced entity extraction
 
@@ -477,7 +477,7 @@ private object QueryProcessor {
             { "local": ["keyword1", "keyword2"], "global": ["theme1", "theme2"] }
         """.trimIndent()
         try {
-            val response = client.post("http://localhost:11434/api/generate") {
+            val response = httpClient.post("http://localhost:11434/api/generate") {
                 contentType(ContentType.Application.Json)
                 val jsonRequest = buildJsonObject {
                     put("prompt", prompt)
@@ -552,7 +552,7 @@ object AnswerGenerator {
             Generate a detailed, contextually accurate answer.
         """.trimIndent()
         try {
-            val response = client.post("http://localhost:11434/api/generate") {
+            val response = httpClient.post("http://localhost:11434/api/generate") {
                 contentType(ContentType.Application.Json)
                 setBody(buildJsonObject {
                     put("prompt", prompt)
