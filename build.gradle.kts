@@ -49,7 +49,6 @@ dependencies {
     implementation("com.kuzudb:kuzu:0.8.0")
 
     implementation("org.jgrapht:jgrapht-core:1.5.1")
-    implementation("org.jgrapht:jgrapht-alg:1.5.1")
 
     implementation("nl.cwts:networkanalysis:1.3.0")
 
