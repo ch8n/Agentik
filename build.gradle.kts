@@ -41,9 +41,14 @@ dependencies {
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
 
+    // Logging
+    implementation("io.github.microutils:kotlin-logging:2.0.11")
+    implementation("org.slf4j:slf4j-simple:1.7.32")
 
     implementation("org.neo4j.driver:neo4j-java-driver:5.9.0")
     implementation("com.kuzudb:kuzu:0.8.0")
+    implementation("org.jgrapht:jgrapht-core:1.5.1") // For graph manipulation, can be used as MutableGraph
+    implementation("nl.cwts:networkanalysis:1.3.0")
 
     implementation(kotlin("test"))
 
