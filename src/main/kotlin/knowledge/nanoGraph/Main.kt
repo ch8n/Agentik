@@ -1,5 +1,6 @@
 package knowledge.nanoGraph
 
+import KuzuDBStorage
 import kotlinx.coroutines.runBlocking
 
 

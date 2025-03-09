@@ -1,5 +1,6 @@
 package knowledge.nanoGraph
 
+import BaseGraphStorage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*

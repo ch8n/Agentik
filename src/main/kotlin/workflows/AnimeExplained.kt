@@ -46,6 +46,9 @@ import java.io.File
 import java.util.*
 import javax.imageio.ImageIO
 
+const val VISION_LLM = "llava-phi3:latest"
+const val CHAT_LLM = "MHKetbi/Unsloth-Phi-4-mini-instruct:q8_0"
+
 fun extractScreenshots(inputVideo: String, outputDir: String, frames: Float) {
     // Ensure the output directory exists
     val outputDirectory = File(outputDir)
@@ -192,7 +195,7 @@ suspend fun processImage(imageFile: File): ImageResponse {
     }
 
     val requestBody = buildJsonObject {
-        put("model", "granite3.2-vision:2b-q8_0")
+        put("model", VISION_LLM)
         put("stream", false)
         putJsonArray("messages") {
             addJsonObject {
@@ -284,7 +287,7 @@ suspend fun processVoiceOverScript(prompt: String): VoiceOverResponse {
 
     val requestBody = buildJsonObject {
         //put("model", "MHKetbi/Unsloth-Phi-4-mini-instruct:q8_0")
-        put("model", "deepscaler:latest")
+        put("model", CHAT_LLM)
         put("stream", false)
         putJsonObject("options") {
             put("num_ctx", 8091)
@@ -318,33 +321,33 @@ suspend fun processVoiceOverScript(prompt: String): VoiceOverResponse {
 
 
 fun refreshVoiceOver(coroutineScope: CoroutineScope): Unit = runBlocking {
-    val videoPath = "cache/video/videoplayback.mp4"
+//    val videoPath = "cache/video/videoplayback.mp4"
     val outputDirectory = "cache/output" // Set the output directory path
-    extractScreenshots(videoPath, outputDirectory, frames = 2f)
-    val imagesFiles = listSortedImages(outputDirectory)
-    """
-        [{ 
-            "imageDescription":String,
-            "subTitle":String,
-        }]
-    """.trimIndent()
-
-    val storyFrames = mutableListOf<StoryImageResponse>()
+//    extractScreenshots(videoPath, outputDirectory, frames = 2f)
+//    val imagesFiles = listSortedImages(outputDirectory)
+//    """
+//        [{
+//            "imageDescription":String,
+//            "subTitle":String,
+//        }]
+//    """.trimIndent()
+//
+//    val storyFrames = mutableListOf<StoryImageResponse>()
     val storylineFile = File("$outputDirectory/storyline.json")
-    imagesFiles.map { file ->
-        coroutineScope.async(Dispatchers.IO) {
-            println("Processing ${file.name}")
-            val imageResponse = processImage(file)
-            storyFrames.add(
-                StoryImageResponse(
-                    imageFilePath = file.absolutePath,
-                    imageResponse = imageResponse
-                )
-            )
-            val storyline = jsonClient.encodeToString(storyFrames)
-            storylineFile.writeText(storyline)
-        }
-    }.awaitAll()
+//    imagesFiles.map { file ->
+//        coroutineScope.async(Dispatchers.IO) {
+//            println("Processing ${file.name}")
+//            val imageResponse = processImage(file)
+//            storyFrames.add(
+//                StoryImageResponse(
+//                    imageFilePath = file.absolutePath,
+//                    imageResponse = imageResponse
+//                )
+//            )
+//            val storyline = jsonClient.encodeToString(storyFrames)
+//            storylineFile.writeText(storyline)
+//        }
+//    }.awaitAll()
 
     val storylineJson = storylineFile.readText()
     val storylines = jsonClient.decodeFromString<List<StoryImageResponse>>(storylineJson)
@@ -491,7 +494,7 @@ fun HorizontalPagerScreen(pages: VoiceOverResponse) {
             ) {
                 // Load and display image
                 val imageBitmap =
-                    loadImageFromFile("/Users/chetan.gupta/Desktop/chetan/ch8n/rough/Agentik/" + pages.sentences[page].voiceOverBackgroundImage)
+                    loadImageFromFile(".${pages.sentences[page].voiceOverBackgroundImage}")
                 if (imageBitmap != null) {
                     Image(
                         bitmap = imageBitmap,

@@ -1,5 +1,6 @@
 package knowledge.nanoGraph
 
+import BaseGraphStorage
 import mu.KotlinLogging
 import java.io.File
 
