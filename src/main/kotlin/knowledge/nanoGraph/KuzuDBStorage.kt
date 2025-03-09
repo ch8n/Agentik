@@ -4,9 +4,11 @@ import kotlinx.coroutines.withContext
 import mu.KotlinLogging
 import nl.cwts.networkanalysis.LeidenAlgorithm
 import nl.cwts.networkanalysis.Network
+import org.jgrapht.alg.clustering.LabelPropagationClustering
 import org.jgrapht.graph.DefaultWeightedEdge
 import org.jgrapht.graph.SimpleWeightedGraph
 import java.util.*
+
 
 
 private val logger = KotlinLogging.logger {}
@@ -114,13 +116,12 @@ class KuzuDBStorage(private val dbPath: String) : BaseGraphStorage {
     }
 
     override suspend fun clustering() = withContext(Dispatchers.IO) {
-        // Extract nodes
         val nodesQuery = "MATCH (n:Entity) RETURN n.id"
         val nodesResult = conn.query(nodesQuery)
         val nodes = mutableListOf<String>()
         while (nodesResult.hasNext()) {
             val tuple = nodesResult.getNext()
-            nodes.add(tuple.getValue(0).toString()) // Process immediately
+            nodes.add(tuple.getValue(0).toString())
         }
 
         // Extract edges with weights
@@ -129,22 +130,25 @@ class KuzuDBStorage(private val dbPath: String) : BaseGraphStorage {
         val edges = mutableListOf<Triple<String, String, Float>>()
         while (edgesResult.hasNext()) {
             val tuple = edgesResult.getNext()
-            edges.add(
-                Triple(
-                    tuple.getValue(0).toString(),
-                    tuple.getValue(1).toString(),
-                    tuple.getValue(2).toString().toFloat()
-                )
-            ) // Process immediately
+            edges.add(Triple(tuple.getValue(0).toString(), tuple.getValue(1).toString(), tuple.getValue(2).toString().toFloat()))
         }
 
-        // Placeholder for Leiden algorithm (requires external dependency)
-        val graph = MutableGraph() // Placeholder
-        nodes.forEach { graph.addNode(it) }
-        edges.forEach { (src, tgt, weight) -> graph.addEdge(src, tgt, weight) }
+        // Build the JGraphT graph
+        val graph = SimpleWeightedGraph<String, DefaultWeightedEdge>(DefaultWeightedEdge::class.java)
+        nodes.forEach { graph.addVertex(it) }
+        edges.forEach { (src, tgt, weight) ->
+            val edge = graph.addEdge(src, tgt)
+            if (edge != null) {
+                graph.setEdgeWeight(edge, weight.toDouble())
+            }
+        }
 
-        val partition = LeidenAlg.findPartition(graph, ResolutionParameter(1.0)) // Placeholder
-        partition.getCommunities().forEachIndexed { commId, community ->
+        // Apply Label Propagation algorithm
+        val labelPropagation = LabelPropagationClustering(graph, 10) // 10 iterations
+        val communities = labelPropagation.clustering
+
+        // Assign community IDs to nodes in the database
+        communities.forEachIndexed { commId, community ->
             community.forEach { nodeId ->
                 conn.query("MATCH (n:Entity {id: '$nodeId'}) SET n.communityId = 'community_$commId'")
             }
@@ -206,100 +210,4 @@ class KuzuDBStorage(private val dbPath: String) : BaseGraphStorage {
                 )
             }
         }
-}
-
-/** Placeholder classes for Leiden algorithm (not implemented) */
-class MutableGraph {
-    // Internal graph representation using SimpleWeightedGraph
-    private val graph = SimpleWeightedGraph<String, DefaultWeightedEdge>(DefaultWeightedEdge::class.java)
-
-    // Add a node to the graph
-    fun addNode(node: String) {
-        graph.addVertex(node)
-    }
-
-    // Add a weighted edge between source and target nodes
-    fun addEdge(src: String, tgt: String, weight: Float) {
-        // Ensure nodes exist before adding the edge
-        addNode(src)
-        addNode(tgt)
-        val edge = graph.addEdge(src, tgt)
-        if (edge != null) {
-            graph.setEdgeWeight(edge, weight.toDouble())
-        }
-    }
-
-    // Internal method to access the graph (used by LeidenAlg)
-    internal fun getGraph(): SimpleWeightedGraph<String, DefaultWeightedEdge> = graph
-}
-
-class ResolutionParameter(val value: Double)
-
-object LeidenAlg {
-    fun findPartition(graph: MutableGraph, param: ResolutionParameter): Partition {
-//        // Get the underlying JGraphT graph
-//        val jGraph = graph.getGraph()
-//
-//        // Convert to Leiden's Network format
-//        val network = convertToLeidenNetwork(jGraph)
-//
-//        // Create and configure the Leiden algorithm
-//        val algorithm = LeidenAlgorithm()
-//        algorithm.resolution = param.value
-//
-//        // Run the algorithm to find clusters
-//        val clustering = algorithm.findClustering(network)
-//
-//        // Extract communities from the clustering
-//        val vertices = jGraph.vertexSet().toList()
-//        val communities = mutableListOf<List<String>>()
-//        for (cluster in 0 until clustering.numberOfClusters) {
-//            val community = clustering.getNodes(cluster).map { vertices[it] }
-//            communities.add(community)
-//        }
-//
-//        return Partition(emptyList())
-        return Partition(emptyList())
-    }
-
-    private fun convertToLeidenNetwork(graph: SimpleWeightedGraph<String, DefaultWeightedEdge>): Network {
-
-
-        // Initialize lists to hold node and edge data
-        val nodes: MutableList<String> = ArrayList()
-        val edges: MutableList<LongArray> = ArrayList()
-        val nodeIndexMap: MutableMap<String, Int> = HashMap()
-
-
-// Assign indices to nodes
-        var index = 0
-        for (vertex in graph.vertexSet()) {
-            nodes.add(vertex)
-            nodeIndexMap[vertex] = index++
-        }
-
-
-// Populate edges
-        for (edge in graph.edgeSet()) {
-            val source = graph.getEdgeSource(edge)
-            val target = graph.getEdgeTarget(edge)
-            val weight = graph.getEdgeWeight(edge)
-            edges.add(longArrayOf(nodeIndexMap[source]!!.toLong(), nodeIndexMap[target]!!.toLong(), weight.toLong()))
-        }
-
-
-// Convert lists to arrays
-        val nodeArray = nodes.toTypedArray<String>()
-        val edgeArray = edges.toTypedArray<LongArray>()
-
-
-// Create the CWTS Network
-        //return Network(nodeArray.size, false, edgeArray, true, true)
-        return Network.load("")
-    }
-}
-
-
-class Partition(private val communities: List<List<String>>) {
-    fun getCommunities(): List<List<String>> = communities
 }
