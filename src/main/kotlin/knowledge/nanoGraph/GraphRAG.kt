@@ -4,6 +4,8 @@ import BaseGraphStorage
 import mu.KotlinLogging
 import java.io.File
 
+const val CHAT_MODEL = "MHKetbi/Unsloth-Phi-4-mini-instruct:q8_0"
+
 private val logger = KotlinLogging.logger {}
 
 data class QueryParam(val topK: Int = 5)
@@ -29,7 +31,7 @@ class GraphRAG(
         val results = vectorStorage.query(query, param.topK)
         val context = results.joinToString("\n") { it["content"] as String }
         return ollamaClient.generateCompletion(
-            "MHKetbi/Unsloth-Phi-4-mini-instruct",
+            CHAT_MODEL,
             "Answer based on this context: $context\nQuery: $query"
         )
     }
@@ -38,7 +40,7 @@ class GraphRAG(
         val communities = graphStorage.communitySchema()
         communities.forEach { (key, schema) ->
             val report = ollamaClient.generateCompletion(
-                "MHKetbi/Unsloth-Phi-4-mini-instruct",
+                CHAT_MODEL,
                 """
                     Generate a detailed report for community $key:
                     - Nodes: ${schema.nodes.joinToString(", ")}

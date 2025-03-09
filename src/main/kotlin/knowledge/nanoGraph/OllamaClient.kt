@@ -6,6 +6,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
+import knowledge.code.httpClient
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 import mu.KotlinLogging
@@ -34,19 +35,20 @@ class OllamaClient(private val baseUrl: String = "http://localhost:11434") {
         messages.addAll(historyMessages)
         messages.add(Message("user", prompt))
 
-        val response = client.post("$baseUrl/api/chat") {
-            contentType(ContentType.Application.Json)
-            setBody(Json.encodeToString(JsonElement.serializer(), buildJsonObject {
-                put("model", model)
-                put("messages", JsonArray(messages.map { msg ->
-                    buildJsonObject {
-                        put("role", msg.role)
-                        put("content", msg.content)
-                    }
-                }))
-                put("temperature", temperature)
-                maxTokens?.let { put("max_tokens", it) }
+        val requestBody = buildJsonObject {
+            put("model", model)
+            put("messages", JsonArray(messages.map { msg ->
+                buildJsonObject {
+                    put("role", msg.role)
+                    put("content", msg.content)
+                }
             }))
+            put("temperature", temperature)
+            maxTokens?.let { put("max_tokens", it) }
+        }
+        val response = httpClient.post("http://localhost:11434/api/chat") {
+            contentType(ContentType.Application.Json)
+            setBody(requestBody)
         }
         val json = Json.parseToJsonElement(response.bodyAsText()).jsonObject
         return json["message"]?.jsonObject?.get("content")?.jsonPrimitive?.content

@@ -2,6 +2,7 @@ package knowledge.nanoGraph
 
 import KuzuDBStorage
 import kotlinx.coroutines.runBlocking
+import java.io.File
 
 
 fun main() = runBlocking {
@@ -11,9 +12,9 @@ fun main() = runBlocking {
         ollamaClient.generateEmbeddings("nomic-embed-text", texts)
     }
     val graphRAG = GraphRAG("working_dir", ollamaClient, graphStorage, vectorStorage)
-
-    val texts = listOf("Sample text about AI and machine learning.")
-    graphRAG.index(texts)
+    val testFile = File("/Users/chetan.gupta/Desktop/chetan/ch8n/rough/Agentik/cache/02-functions.md")
+    val testFileContent = testFile.readText()
+    graphRAG.index(listOf(testFileContent))
     val answer = graphRAG.query("What is AI?", QueryParam(topK = 3))
     println(answer)
 }
