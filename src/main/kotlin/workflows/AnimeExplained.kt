@@ -183,7 +183,7 @@ suspend fun processImage(imageFile: File): ImageResponse {
                 put("description", "extract subtitle text if visible in the screen")
             }
         }
-        putJsonArray("required") {
+        putJsonArray("description") {
             add("imageDescription")
             add("subTitle")
         }
