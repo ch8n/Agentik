@@ -3,7 +3,7 @@ package knowledge.querybuilder
 import `01-chat-models`.OllamaAgentikModel
 import `02-functions`.extractors.extractJsonFromMarkdown
 import `03-agents`.Agentik
-import knowledge.code.jsonClient
+import data.jsonClient.jsonClient
 
 class QueryBuilder {
     private val systemPrompt = """

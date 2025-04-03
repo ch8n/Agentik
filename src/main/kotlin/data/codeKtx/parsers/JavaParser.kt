@@ -1,4 +1,4 @@
-package knowledge.code
+package data.codeKtx.parsers
 
 import kotlinx.serialization.Serializable
 import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
@@ -11,19 +11,6 @@ import org.jetbrains.kotlin.com.intellij.psi.PsiJavaFile
 import org.jetbrains.kotlin.com.intellij.psi.PsiModifier
 import org.jetbrains.kotlin.config.CompilerConfiguration
 
-
-
-enum class ParsableLanguage {
-    Kotlin,
-    Java,
-    Unknown;
-    companion object {
-        fun fromString(value: String): ParsableLanguage {
-            return runCatching { ParsableLanguage.valueOf(value) }
-                .getOrDefault(Unknown)
-        }
-    }
-}
 
 @Serializable
 data class JavaClassBreakDown(

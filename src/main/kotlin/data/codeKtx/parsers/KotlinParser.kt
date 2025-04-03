@@ -1,70 +1,27 @@
-package knowledge.code
+package data.codeKtx.parsers
 
-import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.Serializable
 import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
-import org.jetbrains.kotlin.com.intellij.openapi.Disposable
 import org.jetbrains.kotlin.com.intellij.psi.PsiFileFactory
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.idea.KotlinLanguage
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonContentPolymorphicSerializer
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-
-
-object CodeBreakDownSerializer :
-    JsonContentPolymorphicSerializer<CodeBreakDown>(CodeBreakDown::class) {
-    override fun selectDeserializer(
-        element: JsonElement,
-    ): DeserializationStrategy<out CodeBreakDown> {
-        val parsableLanguageString = element.jsonObject["topLevelFunctions"]
-        var parsableLanguage = when{
-            parsableLanguageString != null -> ParsableLanguage.Kotlin
-            element.jsonObject.keys.isEmpty() -> ParsableLanguage.Unknown
-            else -> ParsableLanguage.Java
-        }
-        println("""
-            CodeBreakDownSerializer
-            body -> ${element.jsonObject.keys}
-            parsableLanguageString -> $parsableLanguageString
-            parsableLanguage -> $parsableLanguage
-        """.trimIndent())
-        return when (parsableLanguage) {
-            ParsableLanguage.Kotlin -> KotlinFileBreakdown.serializer()
-            ParsableLanguage.Java -> JavaFileBreakdown.serializer()
-            ParsableLanguage.Unknown -> NoCodeBreakdown.serializer()
-        }
-    }
-}
-
-@Serializable(with = CodeBreakDownSerializer::class)
-interface CodeBreakDown {
-    val parsableLanguage: String
-}
-
-@Serializable
-object NoCodeBreakdown : CodeBreakDown {
-    override val parsableLanguage: String
-        get() = "unknown"
-}
 
 // Data classes to hold breakdown information
 @Serializable
-data class ClassBreakDown(
+data class KotlinClassBreakDown(
     val className: String,
-    val classProperties: ArrayList<ClassProperty>,
-    val classMethods: ArrayList<ClassMethodBreakDown>,
-    val constructorParameters: List<ConstructorParameter>,
+    val classProperties: ArrayList<KotlinClassProperty>,
+    val classMethods: ArrayList<KotlinClassMethodBreakDown>,
+    val kotlinConstructorParameters: List<KotlinConstructorParameter>,
     val classType: String, // enum, data class, object, companion, interface etc
     val entireClassBody: String,
 )
 
 @Serializable
-data class ClassProperty(
+data class KotlinClassProperty(
     val valOrVar: String,
     val propertyName: String,
     val propertyType: String,
@@ -72,7 +29,7 @@ data class ClassProperty(
 )
 
 @Serializable
-data class ClassMethodBreakDown(
+data class KotlinClassMethodBreakDown(
     val methodName: String,
     val returnType: String,
     val parameters: List<String>,
@@ -80,7 +37,7 @@ data class ClassMethodBreakDown(
 )
 
 @Serializable
-data class ConstructorParameter(
+data class KotlinConstructorParameter(
     val parameterName: String,
     val parameterType: String,
     val valOrVar: String,
@@ -88,7 +45,7 @@ data class ConstructorParameter(
 )
 
 @Serializable
-data class TopLevelFunction(
+data class KotlinTopLevelFunction(
     val functionName: String,
     val returnType: String,
     val parameters: List<String>,
@@ -96,7 +53,7 @@ data class TopLevelFunction(
 )
 
 @Serializable
-data class TopLevelProperty(
+data class KotlinTopLevelProperty(
     val propertyName: String,
     val propertyType: String,
     val valOrVar: String, // "val" or "var"
@@ -106,17 +63,17 @@ data class TopLevelProperty(
 
 @Serializable
 data class KotlinFileBreakdown(
-    val topLevelFunctions: List<TopLevelFunction>,
-    val topLevelProperties: List<TopLevelProperty>,
-    val classBreakdowns: List<ClassBreakDown>,
+    val kotlinTopLevelFunctions: List<KotlinTopLevelFunction>,
+    val kotlinTopLevelProperties: List<KotlinTopLevelProperty>,
+    val kotlinClassBreakdowns: List<KotlinClassBreakDown>,
     val entireFileCode: String,
     override val parsableLanguage: String = "Kotlin"
 ) : CodeBreakDown
 
 
-fun extractTopLevelProperties(ktFile: KtFile): List<TopLevelProperty> {
+fun extractKotlinTopLevelProperties(ktFile: KtFile): List<KotlinTopLevelProperty> {
     return ktFile.declarations.filterIsInstance<KtProperty>().map { property ->
-        TopLevelProperty(
+        KotlinTopLevelProperty(
             propertyName = property.name ?: "Unknown",
             propertyType = property.typeReference?.text ?: "Unknown",
             valOrVar = if (property.isVar) "var" else "val",
@@ -131,9 +88,9 @@ fun extractTopLevelProperties(ktFile: KtFile): List<TopLevelProperty> {
     }
 }
 
-fun extractTopLevelFunctions(ktFile: KtFile): List<TopLevelFunction> {
+fun extractKotlinTopLevelFunctions(ktFile: KtFile): List<KotlinTopLevelFunction> {
     return ktFile.declarations.filterIsInstance<KtNamedFunction>().map { function ->
-        TopLevelFunction(
+        KotlinTopLevelFunction(
             functionName = function.name ?: "UnknownFunction",
             returnType = function.typeReference?.text ?: "Unit",
             parameters = function.valueParameters.map { param ->
@@ -144,9 +101,9 @@ fun extractTopLevelFunctions(ktFile: KtFile): List<TopLevelFunction> {
     }
 }
 
-fun extractClassConstructorParameters(klass: KtClass): List<ConstructorParameter> {
+fun extractKotlinClassConstructorParameters(klass: KtClass): List<KotlinConstructorParameter> {
     return klass.primaryConstructor?.valueParameters?.map { param ->
-        ConstructorParameter(
+        KotlinConstructorParameter(
             parameterName = param.name ?: "Unknown",
             parameterType = param.typeReference?.text ?: "Unknown",
             valOrVar = param.valOrVarKeyword?.text ?: "", // Whether it's 'val' or 'var'
@@ -161,7 +118,7 @@ fun extractClassConstructorParameters(klass: KtClass): List<ConstructorParameter
 }
 
 // Function to determine class type (data class, object, etc.)
-fun determineClassType(klass: KtClassOrObject): String {
+fun determineKotlinClassType(klass: KtClassOrObject): String {
     return when {
         klass is KtClass && klass.hasModifier(KtTokens.ABSTRACT_KEYWORD) -> "Abstract Class"
         klass is KtClass && klass.hasModifier(KtTokens.VALUE_KEYWORD) ||
@@ -180,12 +137,12 @@ fun determineClassType(klass: KtClassOrObject): String {
 }
 
 // Extract properties from a class
-fun extractClassProperties(klass: KtClass): ArrayList<ClassProperty> {
-    val properties = arrayListOf<ClassProperty>()
+fun extractKotlinClassProperties(klass: KtClass): ArrayList<KotlinClassProperty> {
+    val properties = arrayListOf<KotlinClassProperty>()
     klass.getProperties().forEach {
         val typeRef = it.typeReference?.text ?: "Unknown"
         properties.add(
-            ClassProperty(
+            KotlinClassProperty(
                 valOrVar = if (it.isVar) "var" else "val",
                 propertyName = it.name ?: "Unknown",
                 propertyType = typeRef,
@@ -197,8 +154,8 @@ fun extractClassProperties(klass: KtClass): ArrayList<ClassProperty> {
 }
 
 // Extract methods from a class
-fun extractClassMethods(klass: KtClass): ArrayList<ClassMethodBreakDown> {
-    val methods = arrayListOf<ClassMethodBreakDown>()
+fun extractKotlinClassMethods(klass: KtClass): ArrayList<KotlinClassMethodBreakDown> {
+    val methods = arrayListOf<KotlinClassMethodBreakDown>()
     klass.declarations.forEach {
         if (it is KtNamedFunction) {
             val methodName = it.name ?: "UnnamedMethod"
@@ -208,7 +165,7 @@ fun extractClassMethods(klass: KtClass): ArrayList<ClassMethodBreakDown> {
             val entireMethodBody = it.text
 
             methods.add(
-                ClassMethodBreakDown(
+                KotlinClassMethodBreakDown(
                     methodName = methodName,
                     returnType = returnType,
                     parameters = parameters,
@@ -225,35 +182,35 @@ fun extractClassMethods(klass: KtClass): ArrayList<ClassMethodBreakDown> {
 fun parseKotlinCode(sourceCode: String): KotlinFileBreakdown {
     val configuration = CompilerConfiguration()
     val kotlinEnv =
-        KotlinCoreEnvironment.createForProduction(Disposable {}, configuration, EnvironmentConfigFiles.JVM_CONFIG_FILES)
+        KotlinCoreEnvironment.createForProduction({}, configuration, EnvironmentConfigFiles.JVM_CONFIG_FILES)
     val psiFactory = PsiFileFactory.getInstance(kotlinEnv.project)
     val ktFile = psiFactory.createFileFromText("temp.kt", KotlinLanguage.INSTANCE, sourceCode) as KtFile
 
-    val classBreakdowns = mutableListOf<ClassBreakDown>()
+    val kotlinClassBreakdowns = mutableListOf<KotlinClassBreakDown>()
 
     ktFile.declarations.forEach { declaration ->
         if (declaration is KtClass) {
             val className = declaration.name ?: "UnknownClass"
-            val classType = determineClassType(declaration)
-            val properties = extractClassProperties(declaration)
-            val methods = extractClassMethods(declaration)
-            val constructorParams = extractClassConstructorParameters(declaration)
-            val classBreakDown = ClassBreakDown(
+            val classType = determineKotlinClassType(declaration)
+            val properties = extractKotlinClassProperties(declaration)
+            val methods = extractKotlinClassMethods(declaration)
+            val constructorParams = extractKotlinClassConstructorParameters(declaration)
+            val kotlinClassBreakDown = KotlinClassBreakDown(
                 className = className,
                 classProperties = properties,
                 classMethods = methods,
                 entireClassBody = declaration.text,
                 classType = classType,
-                constructorParameters = constructorParams
+                kotlinConstructorParameters = constructorParams
             )
-            classBreakdowns.add(classBreakDown)
+            kotlinClassBreakdowns.add(kotlinClassBreakDown)
         }
     }
 
     return KotlinFileBreakdown(
-        topLevelFunctions = extractTopLevelFunctions(ktFile),
-        topLevelProperties = extractTopLevelProperties(ktFile),
-        classBreakdowns = classBreakdowns,
+        kotlinTopLevelFunctions = extractKotlinTopLevelFunctions(ktFile),
+        kotlinTopLevelProperties = extractKotlinTopLevelProperties(ktFile),
+        kotlinClassBreakdowns = kotlinClassBreakdowns,
         entireFileCode = sourceCode
     )
 }
@@ -299,24 +256,24 @@ fun main() {
     println("\n===== 🏆 PARSED KOTLIN STRUCTURE 🏆 =====\n")
 
     println("🔹 **Top-Level Properties:**")
-    breakdown.topLevelProperties.forEach {
+    breakdown.kotlinTopLevelProperties.forEach {
         println(" - ${it.visibility} ${it.valOrVar} ${it.propertyName}: ${it.propertyType}")
     }
     println()
 
     println("🔹 **Top-Level Functions:**")
-    breakdown.topLevelFunctions.forEach {
+    breakdown.kotlinTopLevelFunctions.forEach {
         println(" - Fun ${it.functionName}(${it.parameters.joinToString(", ")}): ${it.returnType}")
     }
     println()
 
     println("🔹 **Classes & Objects:**")
-    breakdown.classBreakdowns.forEach { classInfo ->
+    breakdown.kotlinClassBreakdowns.forEach { classInfo ->
         println("\n🔹 Class: **${classInfo.className}** (${classInfo.classType})")
         println("📝 Full Declaration:\n${classInfo.entireClassBody}\n")
 
         println("  ✨ **Constructor Parameters:**")
-        classInfo.constructorParameters.forEach {
+        classInfo.kotlinConstructorParameters.forEach {
             println("   - ${it.visibility} ${it.valOrVar} ${it.parameterName}: ${it.parameterType}")
         }
 

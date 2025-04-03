@@ -2,6 +2,9 @@ package knowledge.code
 
 import com.kuzudb.*
 import com.kuzudb.Value
+import data.codeKtx.parsers.*
+import data.httpClient.httpClient
+import data.jsonClient.jsonClient
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
@@ -50,20 +53,6 @@ private data class LLMResponse(val result: String)
 // ==================== Phase 1: Code Preprocessing using TreeSitter ====================
 const val OLLAMA_EMBEDDING = "nomic-embed-text:v1.5"
 const val OLLAMA_CHAT = "hermes3:3b-llama3.2-q8_0"
-val jsonClient = Json {
-    ignoreUnknownKeys = true
-    prettyPrint = true
-}
-val httpClient = HttpClient(CIO) {
-    install(HttpTimeout) {
-        requestTimeoutMillis = 120_000  // 30 seconds
-        connectTimeoutMillis = 120_000  // Optional: 30s for establishing a connection
-        socketTimeoutMillis = 120_000   // Optional: 30s for data transfer
-    }
-    install(ContentNegotiation) {
-        json(jsonClient)
-    }
-}
 
 /**
  * CodeParser uses TreeSitter to parse a given Android codebase (Java, Kotlin, XML).
@@ -631,7 +620,7 @@ fun indexCodebase(basePath: String) = try {
                     val relations = mutableListOf<Relation>()
                     when {
                         chunk is KotlinFileBreakdown -> {
-                            chunk.topLevelFunctions.onEach { it ->
+                            chunk.kotlinTopLevelFunctions.onEach { it ->
                                 val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
                                     chunk.entireFileCode,
                                     it.entireFunctionBody,
@@ -640,7 +629,7 @@ fun indexCodebase(basePath: String) = try {
                                 entities.addAll(ent)
                                 relations.addAll(rln)
                             }
-                            chunk.topLevelProperties.onEach {
+                            chunk.kotlinTopLevelProperties.onEach {
                                 val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
                                     chunk.entireFileCode,
                                     it.entirePropertyBody,
@@ -649,7 +638,7 @@ fun indexCodebase(basePath: String) = try {
                                 entities.addAll(ent)
                                 relations.addAll(rln)
                             }
-                            chunk.classBreakdowns.onEach { clazz ->
+                            chunk.kotlinClassBreakdowns.onEach { clazz ->
                                 clazz.classMethods.onEach { meth ->
                                     val (ent, rln) = EntityExtractor.extractEntitiesAndRelations(
                                         clazz.entireClassBody,

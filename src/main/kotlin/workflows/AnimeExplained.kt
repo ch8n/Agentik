@@ -26,11 +26,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.dp
+import data.httpClient.httpClient
+import data.jsonClient.jsonClient
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import knowledge.code.httpClient
-import knowledge.code.jsonClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
