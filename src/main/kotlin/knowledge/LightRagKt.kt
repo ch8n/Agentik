@@ -1,5 +1,6 @@
 package knowledge
 
+import data.httpClient.httpClient
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
@@ -66,12 +67,11 @@ private object DocumentProcessor {
 // ==================== Phase 2: Embedding Generation & Entity Extraction ====================
 
 private object EmbeddingService {
-    private val client = HttpClient(CIO)
 
     // Calls Ollama embedding API to get a float vector for the input text
     suspend fun getEmbedding(text: String): List<Float> {
         try {
-            val response: HttpResponse = client.post("http://localhost:11434/v1/embed") {
+            val response: HttpResponse = httpClient.post("http://localhost:11434/v1/embed") {
                 contentType(ContentType.Application.Json)
                 setBody(Json.encodeToJsonElement(mapOf("text" to text)))
             }
