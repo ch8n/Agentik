@@ -70,12 +70,14 @@ data class Agentik(
 
     fun executeStreaming(userPrompt: String): Flow<String> {
         return callbackFlow {
-            assistant.chatStreaming(userPrompt)
+            val stream: TokenStream = assistant.chatStreaming(userPrompt)
                 .onNext { token -> trySend(token) }
                 .onError { _error -> close(_error) }
                 .onComplete { close() }
-                .start()
-            awaitClose {}
+            stream.start()
+            awaitClose {
+                close()
+            }
         }
     }
 }

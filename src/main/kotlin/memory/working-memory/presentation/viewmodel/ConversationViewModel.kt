@@ -31,7 +31,7 @@ class ConversationViewModel(
      *
      * @param conversationId The ID of the conversation to load
      */
-    fun loadConversation(conversationId: String) {
+    suspend fun loadConversation(conversationId: String) {
         currentConversationId = conversationId
         
         try {
@@ -47,7 +47,7 @@ class ConversationViewModel(
      *
      * @param userMessage The message from the user
      */
-    fun sendMessage(userMessage: String) {
+    suspend fun sendMessage(userMessage: String) {
         val conversationId = currentConversationId ?: UUID.randomUUID().toString()
         currentConversationId = conversationId
         
@@ -99,7 +99,7 @@ class ConversationViewModel(
     /**
      * Clears the memory for the current conversation.
      */
-    fun clearMemory() {
+    suspend fun clearMemory() {
         currentConversationId?.let {
             workingMemory.clearMemory(it)
             _conversationState.value = ConversationState.Loaded(emptyList())
